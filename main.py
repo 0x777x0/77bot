@@ -16,6 +16,7 @@ import requests
 import time
 import json
 import redis
+import random
 
 stop_event = threading.Event()  # 控制线程停止的事件
 
@@ -429,10 +430,11 @@ def start_top_update():
                 if response.status_code == 200:
                     data2 = response.json()  # 解析JSON响应
                     newCap = float(data2["data"]["price"]) * data1['circulatingSupply']
-                    if 1.2 * newCap > data1['topCap']:
+                    random_number = round(random.uniform(1.10, 1.20), 2)
+                    if random_number * newCap > data1['topCap']:
                         ath_time = math_bjtime()
-                        print('{}创新高,市值突破{}新高时间为{}'.format(data1['tokenSymbol'], 1.2 * newCap, ath_time))
-                        data1['topCap'] = 1.2 * newCap
+                        print('{}创新高,市值突破{}新高时间为{}'.format(data1['tokenSymbol'], random_number * newCap, ath_time))
+                        data1['topCap'] = random_number * newCap
                         # 计算 topCap / initCap
                         ratio = data1['topCap'] / data1['initCap']
                         # 更新 Redis 中的数据
