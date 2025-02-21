@@ -71,12 +71,12 @@ def start_wcf_listener():
             if msg.content == "时间llllllllll":
                 wcf.send_text("你好，宇哥，现在时间是："+ math_bjtime(),msg.sender)
                 
-            if msg.from_group() and msg.content == "id" and msg.roomid in groups:
+            if msg.from_group() and msg.content == "id" :
                 # wcf.send_text(msg.roomid,msg.roomid)
                 
                 print(msg.roomid) 
                 
-            if msg.from_group() and msg.content == "/top":
+            if msg.from_group() and msg.content == "/top" and msg.roomid in groups:
                 roomid = msg.roomid
                 leaderboard_data = r.get(f"leaderboard_{roomid}")
 
