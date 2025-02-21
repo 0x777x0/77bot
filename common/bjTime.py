@@ -4,8 +4,8 @@ def convert_timestamp_to_beijing_time(millisecond_timestamp):
     """
     将毫秒级时间戳转换为北京时间，并格式化为 "02-18 23:33:08" 格式。
 
-    :param millisecond_timestamp: 毫秒级时间戳（例如 1740152409710）
-    :return: 格式化后的北京时间字符串（例如 "02-18 23:33:08"）
+    :param millisecond_timestamp: 毫秒级时间戳（例如 1740152409710
+    :return: 格式化后的北京时间字符串（例如 "02-18 23:33:08"
     """
     # 将毫秒级时间戳转换为秒级
     timestamp_seconds = millisecond_timestamp / 1000

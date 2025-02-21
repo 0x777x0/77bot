@@ -71,7 +71,7 @@ def start_wcf_listener():
             if msg.content == "时间llllllllll":
                 wcf.send_text("你好，宇哥，现在时间是："+ math_bjtime(),msg.sender)
                 
-            if msg.from_group() and msg.content == "id":
+            if msg.from_group() and msg.content == "id" and msg.roomid in groups:
                 # wcf.send_text(msg.roomid,msg.roomid)
                 
                 print(msg.roomid) 
@@ -79,20 +79,53 @@ def start_wcf_listener():
             if msg.from_group() and msg.content == "/top":
                 roomid = msg.roomid
                 leaderboard_data = r.get(f"leaderboard_{roomid}")
-            
+
                 if leaderboard_data:
                     rankings = json.loads(leaderboard_data)
-                    leaderboard_msg = f"📊 24h Top10排行榜 📊\n"
-                    for idx, entry in enumerate(rankings, start=1):
+                    
+                    # 检查排行榜数据是否为空
+                    if not rankings:
+                        wcf.send_text("暂无排行榜数据，群友快快发金狗", roomid)
+                        print(f"分组 {roomid} 的排行榜数据为空")
+                        return  # 直接返回，避免后续逻辑
+                    
+                    # 只取前 10 名
+                    top_10_rankings = rankings[:10]
+                    
+                    # 排行榜标题
+                    leaderboard_msg = "🎉🎊🏅🎊🎉🏅🎉🎊🏅🎊🎉"
+                    leaderboard_msg += "🏆🌟     Top10  排行榜    🌟🏆\n"
+                    leaderboard_msg += "━ ━ ━ ━ ━ ━ ━ ━ ━ ━ ━\n"
+                    
+                    for idx, entry in enumerate(top_10_rankings, start=1):
+                        if idx == 1:
+                            rank_emoji = "🥇🎖️🔥👤"  # 第一名
+                        elif idx == 2:
+                            rank_emoji = "🥈🎖️👤"  # 第二名
+                        elif idx == 3:
+                            rank_emoji = "🥉👤"  # 第三名
+                        else:
+                            rank_emoji = f"{idx}.👤"  # 其他名次
+                        
                         leaderboard_msg += (
-                            f"{idx}. {entry['caller_name']}\n "
-                            f" 🎯{entry['tokenSymbol']}=>"
-                            f": {entry['ratio']:.2f}X\n"
+                            f"{rank_emoji} {entry['caller_name']}\n"
+                            f"   💰  {entry['tokenSymbol']}   🚀 {entry['ratio']:.2f}X\n"
+                            f"━ ━ ━ ━ ━ ━ ━ ━ ━ ━ ━\n"
                         )
+                    # ━━━━━━━━━━━━━━
+                    # 如果数据不足 10 条，添加提示信息
+                    if len(top_10_rankings) < 10:
+                        leaderboard_msg += "\n⚠️ 当前排行榜数据不足 10 条\n"
+                    
+                    # 排行榜底部装饰
+                    leaderboard_msg += "🎉🎊🏅恭喜老板上榜🏅🎊🎉\n"
+                    leaderboard_msg += "🎉🎊🏅🎊🎉🏅🎉🎊🏅🎊🎉"
+                    
                     wcf.send_text(leaderboard_msg, roomid)
                     print(f"已发送排行榜到分组 {roomid}:\n{leaderboard_msg}")
                 else:
-                    wcf.send_text("暂无排行榜数据", roomid)
+                    wcf.send_text("暂无排行榜数据，群友快快发金狗", roomid)
+                    print(f"暂无排行榜数据，群友快快发金狗")
                 
             
             # 判断消息中是否包含ca信息
@@ -110,19 +143,19 @@ def start_wcf_listener():
                     
                     url1 = "https://www.okx.com/priapi/v1/dx/market/v2/latest/info?chainId={}&tokenContractAddress={}".format(chain_id, ca_ca)
                     url2= "https://www.okx.com/priapi/v1/dx/market/v2/token/overview/?chainId={}&tokenContractAddress={}".format(chain_id, ca_ca)      
-                    url3 = "http://47.238.165.188:8080/api/price/get?chain=sol&address={}".format(ca_ca)
+                    #url3 = "http://47.238.165.188:8080/api/price/get?chain=sol&address={}".format(ca_ca)
                         
 
                     # 发送GET请求
                     response1 = requests.get(url1)
                     response2 = requests.get(url2)
-                    response3 = requests.get(url3)
+                    #response3 = requests.get(url3)
 
                     # 检查请求是否成功
-                    if response1.status_code == 200 and response2.status_code == 200 and response3.status_code == 200:
+                    if response1.status_code == 200 and response2.status_code == 200 :
                         data1 = response1.json()  # 解析JSON响应
                         data2 = response2.json()
-                        data3 = response3.json()  
+                        #data3 = response3.json()  
                         
                         # 获取合约基础信息
                         chain_name = data1["data"]["chainName"]            
@@ -252,7 +285,7 @@ def start_wcf_listener():
                     else:
                         print("请求失败，状态码:", response1.status_code)
                         print("请求失败，状态码:", response2.status_code)
-                        print("请求失败，状态码:", response3.status_code)       
+                        #print("请求失败，状态码:", response3.status_code)       
                 
             elif eths_id:
                 chain_id = eths_id
@@ -367,6 +400,9 @@ def start_wcf_listener():
 # 每5分钟更新top数据和最高倍数数据
 def start_top_update():
     print('开始更新排行榜数据')
+    # 初始化全局 rankings 字典，用于存储每个群组的排行榜数据
+    global_rankings = {roomid: [] for roomid in groups}
+
     while not stop_event.is_set():
         time.sleep(30)  # 300 秒 = 5 分钟
         for roomid in groups:
@@ -375,15 +411,15 @@ def start_top_update():
             print(ca_data)
             if not ca_data:
                 continue
-           
-            # 更新 topCap 并计算 topCap / initCap
-            rankings = []
+
+            # 获取上一次的排行榜数据
+            rankings = global_rankings.get(roomid, [])
+
             for ca_ca, data_json in ca_data.items():
                 data1 = json.loads(data_json)
                 time.sleep(1)
                 # 监测topcap数据是否创新高
                 # 接口URL
-                #url = "http://47.238.165.188:8080/api/price/get?chain=sol&address={}".format(ca_ca)
                 url = "https://www.okx.com/priapi/v1/dx/market/v2/latest/info?chainId=501&tokenContractAddress={}".format(ca_ca)
 
                 # 发送GET请求
@@ -392,72 +428,82 @@ def start_top_update():
                 # 检查请求是否成功
                 if response.status_code == 200:
                     data2 = response.json()  # 解析JSON响应
-                    newCap = float(data2["data"]["price"])*data1['circulatingSupply']
-                    if 1.2*newCap > data1['topCap']:
+                    newCap = float(data2["data"]["price"]) * data1['circulatingSupply']
+                    if 1.2 * newCap > data1['topCap']:
                         ath_time = math_bjtime()
-                        print('{}创新高,市值突破{}新高时间为{}'.format(data1['tokenSymbol'],1.2*newCap,ath_time))
-                        data1['topCap'] = 2*newCap
+                        print('{}创新高,市值突破{}新高时间为{}'.format(data1['tokenSymbol'], 1.2 * newCap, ath_time))
+                        data1['topCap'] = 1.2 * newCap
                         # 计算 topCap / initCap
                         ratio = data1['topCap'] / data1['initCap']
-                        rankings.append({
-                        'tokenSymbol': data1['tokenSymbol'],
-                        'caller_name': data1['caller_name'],
-                        'ratio': ratio
-                            })
-                            # 更新 Redis 中的数据
+                        # 更新 Redis 中的数据
                         r.hset(roomid, ca_ca, json.dumps(data1))
-                    #print(data2)
-                    #data_list = data2['data']
-                    '''
-                    for i in range(len(data_list)):
-                        if data1['query_time'] >= data_list[i]['times']:
-                            pass
+
+                        # 更新 rankings 中的数据
+                        # 查找是否已经存在该代币的数据
+                        existing_entry = next((entry for entry in rankings if entry['tokenSymbol'] == data1['tokenSymbol']), None)
+                        if existing_entry:
+                            # 如果存在，更新 ratio
+                            existing_entry['ratio'] = ratio
                         else:
-                            print(ca_ca)
-                            print(data_list[i]['price'])
-                            print(data1['circulatingSupply'])
-                            print(data_list[i]['price']*data1['circulatingSupply'])
-                            
-                            if data1['topCap'] >= data_list[i]['price']*data1['circulatingSupply']:
-                                pass
-                            else:
-                                print('{}更新最高价,新高时间为｛｝'.format(data1['tokenSymbol'],convert_timestamp_to_beijing_time(data_list[i]['times'])))
-                                data1['topCap'] = data_list[i]['price']*data1['circulatingSupply']  
-                                # 计算 topCap / initCap
-                                ratio = data1['topCap'] / data1['initCap']
-                                rankings.append({
+                            # 如果不存在，添加新数据
+                            rankings.append({
                                 'tokenSymbol': data1['tokenSymbol'],
                                 'caller_name': data1['caller_name'],
                                 'ratio': ratio
-                                 })
-                                 # 更新 Redis 中的数据
-                                r.hset(roomid, ca_ca, json.dumps(data1))
-                                
-                    # 更新最新的查询时间            
-                    data1['query_time'] = data_list[-1]['times']  
-                    '''
+                            })
+                    else:
+                        # 如果未创新高，直接使用已有的 ratio
+                        ratio = data1['topCap'] / data1['initCap']
+                        # 查找是否已经存在该代币的数据
+                        existing_entry = next((entry for entry in rankings if entry['tokenSymbol'] == data1['tokenSymbol']), None)
+                        if not existing_entry:
+                            # 如果不存在，添加新数据
+                            rankings.append({
+                                'tokenSymbol': data1['tokenSymbol'],
+                                'caller_name': data1['caller_name'],
+                                'ratio': ratio
+                            })
                 else:
                     print("请求失败，状态码:", response.status_code)
-                
-                if rankings:
-                    pass
-                else:
-                    # 计算 topCap / initCap
-                    ratio = data1['topCap'] / data1['initCap']
-                    rankings.append({
-                        'tokenSymbol': data1['tokenSymbol'],
-                        'caller_name': data1['caller_name'],
-                        'ratio': ratio
-                    })
-                    # 更新 Redis 中的数据
-                    r.hset(roomid, ca_ca, json.dumps(data1))
-     
+
             # 按 ratio 从高到低排序
             rankings.sort(key=lambda x: x['ratio'], reverse=True)
+
+            # 更新全局 rankings 数据
+            global_rankings[roomid] = rankings
 
             # 将排行榜数据存储到 Redis 中
             r.set(f"leaderboard_{roomid}", json.dumps(rankings))
             print(f"已更新分组 {roomid} 的排行榜数据")
+
+            '''
+                for i in range(len(data_list)):
+                    if data1['query_time'] >= data_list[i]['times']:
+                        pass
+                    else:
+                        print(ca_ca)
+                        print(data_list[i]['price'])
+                        print(data1['circulatingSupply'])
+                        print(data_list[i]['price']*data1['circulatingSupply'])
+                        
+                        if data1['topCap'] >= data_list[i]['price']*data1['circulatingSupply']:
+                            pass
+                        else:
+                            print('{}更新最高价,新高时间为｛｝'.format(data1['tokenSymbol'],convert_timestamp_to_beijing_time(data_list[i]['times'])))
+                            data1['topCap'] = data_list[i]['price']*data1['circulatingSupply']  
+                            # 计算 topCap / initCap
+                            ratio = data1['topCap'] / data1['initCap']
+                            rankings.append({
+                            'tokenSymbol': data1['tokenSymbol'],
+                            'caller_name': data1['caller_name'],
+                            'ratio': ratio
+                                })
+                                # 更新 Redis 中的数据
+                            r.hset(roomid, ca_ca, json.dumps(data1))
+                            
+                # 更新最新的查询时间            
+                data1['query_time'] = data_list[-1]['times']  
+                '''
 
 
 # 启动更新top10的 的线程
