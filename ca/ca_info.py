@@ -2,7 +2,7 @@ import re
 import math
 import pytz
 import logging
-import redis
+from common.cache import redis
 import requests
 
 from decimal import Decimal, getcontext
@@ -81,7 +81,7 @@ def math_bjtime():
     # 转换为北京时间（东八区）
     beijing_time = now_utc.astimezone(pytz.timezone("Asia/Shanghai"))
 
-    # 格式化为 "2025-02-18 23:33:08" 的格式
+    # 格式化为 "02-18 23:33:08" 的格式
     formatted_time = beijing_time.strftime("%m-%d %H:%M:%S")   
     
     return formatted_time

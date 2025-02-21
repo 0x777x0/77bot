@@ -1,7 +1,7 @@
 import requests
 
 # 接口URL
-url = "http://47.238.165.188:8080/api/price/get?chain=sol&address=5cmfvVhDvMDafDxwTcZBhLByCCS2HEqnuMLMiK3DRisk"
+url = "http://47.238.165.188:8080/api/price/get?chain=sol&address=J341LbyypFvgYxsgK9aEK9qqUzmr2nGZwqXUMsWZpump"
 
 # 发送GET请求
 response = requests.get(url)

@@ -1,12 +1,6 @@
 import redis
 import time
 
-'''ca_datas[roomid][ca_ca] = {
-                            'caller_name':caller_name,
-                            'initCap':float(data1["data"]["marketCap"]),
-                            'topCap':float(data1["data"]["marketCap"]),
-                            'find_time':find_time,
-                            'query_time':find_time}  
 '''
 
 ca_datas = {
@@ -50,3 +44,11 @@ try:
         time.sleep(1)  # 每秒更新一次
 except KeyboardInterrupt:
     print("程序被手动停止")
+'''
+
+# 初始化 Redis 客户端
+redis_client = redis.Redis(host='localhost', port=6379, db=0)
+
+# 清除所有数据库
+redis_client.flushall()
+print("所有数据库已清除")
