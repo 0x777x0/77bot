@@ -2,10 +2,13 @@ import re
 import math
 import pytz
 import logging
+import redis
+import requests
 
 from decimal import Decimal, getcontext
 from datetime import datetime
 from base58 import b58decode
+from util.date_util import get_timestamp
 
 
 
@@ -85,6 +88,51 @@ def math_bjtime():
     
   
 
+
+def get_bundles(address):
+    """
+    获取指定 address 的 bundle 信息。
+
+    :param address: 要查询的地址
+    :return: 如果成功，返回 (total_percentage_bundled, total_holding_percentage)；如果失败，返回 None。
+    """
+    url = f"https://trench.bot/api/bundle/bundle_advanced/{address}"
+    redis_key = f"sol:bundles:{address}"
+    data = redis.get(redis_key)
+
+    # 检查 Redis 缓存
+    if data:
+        cached_values = data.split(",")
+        total_percentage_bundled = cached_values[0]
+        total_holding_percentage = cached_values[1]
+        return float(total_percentage_bundled), float(total_holding_percentage)
+
+    try:
+        # 发送 API 请求
+        start = get_timestamp()
+        logging.debug("获取 bundle 信息,address: %s", address)
+        response = requests.get(url, timeout=7)  # 设置超时时间
+        logging.debug("监控 ===> get_bundles, 耗时: %s", get_timestamp() - start)
+
+        if response.status_code == 200:
+            data = response.json()
+            total_percentage_bundled = round(data['total_percentage_bundled'], 2)
+            total_holding_percentage = round(data['total_holding_percentage'], 2)
+            logging.debug("获取 bundle 信息成功,address: %s, data: %s", address, data)
+
+            # 缓存结果到 Redis
+            redis.set(redis_key, f"{total_percentage_bundled},{total_holding_percentage}", ex=60 * 5)
+            return total_percentage_bundled, total_holding_percentage
+        else:
+            logging.error("请求 bundles 失败,address: %s, status_code: %s, response: %s", address, response.status_code, response.text)
+    except requests.exceptions.RequestException as e:
+        logging.error("API 请求失败,address: %s, 错误信息: %s", address, str(e))
+    except ValueError as e:
+        logging.error("JSON 解析失败,address: %s, 错误信息: %s", address, str(e))
+    except Exception as e:
+        logging.error("请求 bundles 过程中发生未知错误,address: %s, 错误信息: %s", address, str(e), exc_info=True)
+
+    return None
 
 
 
