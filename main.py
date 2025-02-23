@@ -9,6 +9,7 @@ from datetime import datetime, timedelta, timezone
 from common.bjTime import convert_timestamp_to_beijing_time
 from ca.binance import get_binance_price
 # from common.cache import redis
+from ca.binance import get_binance_price
 
 import threading
 import functools
@@ -158,7 +159,7 @@ def start_wcf_listener():
                     url1 = "https://www.okx.com/priapi/v1/dx/market/v2/latest/info?chainId={}&tokenContractAddress={}".format(chain_id, ca_ca)
                     url2= "https://www.okx.com/priapi/v1/dx/market/v2/token/overview/?chainId={}&tokenContractAddress={}".format(chain_id, ca_ca)      
                     #url3 = "http://47.238.165.188:8080/api/price/get?chain=sol&address={}".format(ca_ca)
-                        
+ 
 
                     # 发送GET请求
                     response1 = requests.get(url1)
@@ -166,11 +167,13 @@ def start_wcf_listener():
                     #response3 = requests.get(url3)
 
                     # 检查请求是否成功
-                    if response1.status_code == 200 and response2.status_code == 200 :
+                    if response1.status_code == 200 and response2.status_code == 200:
                         data1 = response1.json()  # 解析JSON响应
                         data2 = response2.json()
                         #data3 = response3.json()  
-                        
+
+
+
                         # 获取合约基础信息
                         chain_name = data1["data"]["chainName"]            
                         tokenSymbol = data1["data"]["tokenSymbol"]
@@ -190,6 +193,18 @@ def start_wcf_listener():
                         twitter = data2["data"]["socialMedia"]["twitter"]                  
                         officialWebsite = data2["data"]["socialMedia"]["officialWebsite"]
                         telegram = data2["data"]["socialMedia"]["telegram"]
+
+                        # 获取池子创建时间
+                        #先从raydium 获取时间
+                        pool_create_time = get_pool_create_time(chain_id, ca_ca)
+                        if(pool_create_time == 0):
+                            #无法从raydium 就获取代币创建时间表示pump
+                            pool_create_time = data2["data"]["memeInfo"]["createTime"]
+                        find_pool_create_time = '未发现'
+                        if(pool_create_time > 0):
+                            find_pool_create_time = pool_create_time.strftime("%m-%d %H:%M:%S")
+
+
                         # 对社交信息进行验证
                         twitter_info = is_x(twitter) 
                         officialWebsite_info = is_web(officialWebsite)
@@ -246,7 +261,8 @@ def start_wcf_listener():
                             f"🚀最大倍数: {str(round(data_save['topCap'] / data_save['initCap'], 2)) + 'X'}\n"
                             f"🔥当前倍数: {str(round(nowCap / float(data_save['initCap']), 2)) + 'X'}\n\n"
                             f"💬大致叙事: {description}\n"
-                            f"🎯发现时间：{find_time}"
+                            f"🎯发现时间：{find_time}\n"
+                            f"🎯发现时间：{find_pool_create_time}"
                             )                            
                             wcf.send_text(info,msg.roomid)
                             print(info)
@@ -272,7 +288,8 @@ def start_wcf_listener():
                             f"🚀最大倍数: 1.00X\n"
                             f"🔥当前倍数: 1.00X\n\n"
                             f"💬大致叙事: {description if description else '暂无叙事'}\n"
-                            f"🎯发现时间：{find_time}"
+                            f"🎯发现时间：{find_time}\n"
+                            f"🎯发现时间：{find_pool_create_time}"
                             )
                     
                             wcf.send_text(info,msg.roomid)
@@ -521,6 +538,40 @@ def start_top_update():
                 data1['query_time'] = data_list[-1]['times']  
                 '''
 
+def get_pool_create_time(chainId,address):
+    url = f"https://www.okx.com/priapi/v1/dx/market/pool/list?chainId={chainId}&tokenContractAddress={address}"
+    
+    # 发送 GET 请求
+    response = requests.get(url)
+    
+    # 获取响应内容
+    value = response.text
+    # print(value)
+    # 如果返回为空，直接返回
+    if not value:
+        return 0
+    
+    pool_create_time = 0
+    data = json.loads(value)  # 将响应内容转换为字典
+    code = data.get("code")
+    
+    # 如果返回码为 0，表示成功
+    if code == 0:
+        data = data.get("data")
+        list_data = data.get("list")
+        
+        # 遍历池子列表
+        for obj in list_data:
+            create_timestamp = obj.get("createTimestamp")
+            if pool_create_time == 0:
+                pool_create_time = create_timestamp
+            else:
+                if pool_create_time < create_timestamp:
+                    pool_create_time = create_timestamp
+    
+    return pool_create_time
+
+
 
 # 启动更新top10的 的线程
 # 启动所有线程
@@ -554,3 +605,4 @@ groups = ["51641835076@chatroom",'52173635194@chatroom']
 #ca_group_datas = []
 
 start_all_tasks()
+# get_binance_price("BTC");
