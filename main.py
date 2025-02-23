@@ -1,7 +1,7 @@
 
 from wcferry import Wcf
 from queue import Empty
-from ca.ca_info import is_solca, is_eths, math_price, math_km, math_percent, math_bjtime, get_bundles, is_cexToken
+from ca.ca_info import is_solca, is_eths, math_price, math_km, math_percent, math_bjtime, get_bundles, is_cexToken, is_pump
 from common.socialMedia_info import is_x, is_web, is_TG
 from common.translate import translate
 from queue import Empty
@@ -80,7 +80,7 @@ def start_wcf_listener():
                 print(msg.roomid) 
             
 
-            if msg.from_group() and is_cexToken(msg.content) and msg.from_group()!= 'top' and msg.roomid in groups :
+            if msg.from_group() and is_cexToken(msg.content) and msg.content!= 'top' and msg.roomid in groups :
                 
                 token_symble = msg.content[1:]
 
@@ -195,24 +195,27 @@ def start_wcf_listener():
                         twitter = data2["data"]["socialMedia"]["twitter"]                  
                         officialWebsite = data2["data"]["socialMedia"]["officialWebsite"]
                         telegram = data2["data"]["socialMedia"]["telegram"]
+                        # 对社交信息进行验证
+                        twitter_info = is_x(twitter) 
+                        officialWebsite_info = is_web(officialWebsite)
+                        telegram_info = is_TG(telegram)  
 
                         # 获取池子创建时间
                         #先从raydium 获取时间
                         pool_create_time = get_pool_create_time(chain_id, ca_ca)
+                        
                         if(pool_create_time == 0):
                             #无法从raydium 就获取代币创建时间表示pump
                             pool_create_time = data2["data"]["memeInfo"]["createTime"]
                         find_pool_create_time = '未发现'
+                        
                         if(pool_create_time > 0):
                             dt_object = datetime.fromtimestamp(pool_create_time/1000)
                             find_pool_create_time = dt_object.strftime('%m-%d %H:%M:%S')  # 格式：年-月-日 时:分:秒
 
 
 
-                        # 对社交信息进行验证
-                        twitter_info = is_x(twitter) 
-                        officialWebsite_info = is_web(officialWebsite)
-                        telegram_info = is_TG(telegram)                   
+                                         
                         
 
                         # 记录哨兵caller信息
@@ -274,6 +277,7 @@ def start_wcf_listener():
                             
                         # 首次出现    
                         else:
+                            cp_time = '发射时间' if is_pump(ca_ca) else '创建时间'
                             description = translate(data2["data"]['socialMedia']['description']) if data2["data"]['socialMedia']['description'] else '暂无叙事'
                             caller_name = caller_simulate_name
                             info = (
@@ -293,7 +297,7 @@ def start_wcf_listener():
                             f"🔥当前倍数: 1.00X\n\n"
                             f"💬大致叙事: {description if description else '暂无叙事'}\n"
                             f"🎯发现时间：{find_time}\n"
-                            f"🎯创建时间：{find_pool_create_time}"
+                            f"🎯{cp_time}:{find_pool_create_time}"
                             )
                     
                             wcf.send_text(info,msg.roomid)
@@ -325,12 +329,11 @@ def start_wcf_listener():
             elif eths_id:
                 chain_id = eths_id
                 ca_ca = eths_ca
-                print('发现eths合约')
-                
+                        
                 if msg.from_group()  and msg.roomid in groups:   
-                
-                    print("开始查询ca信息")      
+                    print('发现eths合约，开始查询ca信息') 
                     find_time = math_bjtime()
+                    find_time_ms = int(time.time()*1000)
                     
                     url1 = "https://www.okx.com/priapi/v1/dx/market/v2/latest/info?chainId={}&tokenContractAddress={}".format(chain_id, ca_ca)
                     url2= "https://www.okx.com/priapi/v1/dx/market/v2/token/overview/?chainId={}&tokenContractAddress={}".format(chain_id, ca_ca)
@@ -354,42 +357,73 @@ def start_wcf_listener():
                         volume = math_km(float(data1["data"]["volume"]))
                         holders = data1["data"]["holders"]
                         top10HoldAmountPercentage = math_percent(float(data1["data"]["top10HoldAmountPercentage"]))             
-                                    
+                        total_holding_percentage  = '功能优化中'
                         roomid = msg.roomid
+                        
+                        #获取社交信息
+                        twitter = data2["data"]["socialMedia"]["twitter"]                  
+                        officialWebsite = data2["data"]["socialMedia"]["officialWebsite"]
+                        telegram = data2["data"]["socialMedia"]["telegram"]
+                        # 对社交信息进行验证
+                        twitter_info = is_x(twitter) 
+                        officialWebsite_info = is_web(officialWebsite)
+                        telegram_info = is_TG(telegram)  
+
+
                         caller_wxid = msg.sender
                         chatroom_members = wcf.get_chatroom_members(roomid=roomid)
                         caller_simulate_name = chatroom_members[caller_wxid]
                         # 将caller喊单信息组装成模拟数据
-                        ca_group_simulate_datas = [ca_ca,roomid]
+                        ca_group_simulate_datas = [roomid,ca_ca]
+                        redis_key = 'ca_group_simulate_datas'
+                        ca_group_datas = get_data_from_redis(redis_key)
+                        data_save = get_nested_data_from_redis(roomid = roomid,ca_ca = ca_ca)
                         # 判断该ca在当前群组是不是首次出现
-                    
-                        if ca_group_simulate_datas in ca_group_datas:
+                        if data_save :
+                            # 如果是再次出现，则需要找到哨兵数据
+                            print('该合约重复出现')
+                            query_time = int(time.time()*1000)
+                            ca_datas = get_nested_data_from_redis(roomid, ca_ca)
                             
-                            for i in range(len(ca_datas)):
-                                if [ca_datas[i][0],ca_datas[i][1]] != ca_group_simulate_datas:
-                                    pass
-                                else:
-                                    caller_name = ca_datas[i][2]
-                                    find_time = ca_datas[i][-1]
-                                    info = (
-                                    f"{ca_ca}\n"
-                                    f"链: {chain_name}\n"
-                                    f"简写：{tokenSymbol}\n"
-                                    f"名称：{tokenName}\n"
-                                    f"💰价格: {price}\n"
-                                    f"💹流通市值：{marketCap}\n"
-                                    f"📊交易量：{volume}\n"
-                                    f"🦸持有人: {holders}\n"
-                                    f"🐋top10持仓：{top10HoldAmountPercentage}\n\n"
-                                    f"{twitter_info[0]}{twitter_info[1]}{officialWebsite_info[0]}{officialWebsite_info[1]}{telegram_info[0]}{telegram_info[1]}\n"
-                                    f"🕵️哨兵：{caller_name}\n\n"
-                                    f"💬大致叙事: {description if description else '暂无叙事'}\n\n"
-                                    f"🎯发现时间：{find_time}"
-                                )                               
-                                    wcf.send_text(info,msg.roomid)
-                                    print(info)
+                            caller_name = data_save["caller_name"]
+                            find_time = data_save["find_time"]
+
+                            timestamp_seconds = find_time / 1000
+                            # 转换为 UTC 时间
+                            utc_time = datetime.fromtimestamp(timestamp_seconds, tz=timezone.utc)
+                            # 转换为北京时间（UTC+8）
+                            beijing_time = utc_time + timedelta(hours=8)
+                            # 格式化输出
+                            find_time = beijing_time.strftime("%m-%d %H:%M:%S")
+
+                            description = translate(data2["data"]['socialMedia']['description']) if data_save["description"] == '暂无叙事' else data_save["description"]                           
+                            nowCap = float(data1["data"]["price"])*float(data1["data"]["circulatingSupply"])
+                        
+                            print(data_save)
+                            
+                            info = (
+                            f"{ca_ca}\n"
+                            f"简写：{tokenSymbol}\n"
+                            f"名称：{tokenName}\n"
+                            f"💰价格: {price}\n"
+                            f"💹流通市值：{marketCap}\n"
+                            f"📊交易量：{volume}\n"
+                            f"🦸持有人: {holders}\n"
+                            f"🐋top10持仓: {top10HoldAmountPercentage}\n"
+                            f"🍭捆绑比例：{total_holding_percentage}\n\n"
+                            f"{twitter_info[0]}{twitter_info[1]}{officialWebsite_info[0]}{officialWebsite_info[1]}{telegram_info[0]}{telegram_info[1]}\n"
+                            f"🕵️哨兵：{caller_name}\n"
+                            f"📈Call: {math_km(data_save['initCap'])} -> {math_km(data_save['topCap'])}\n"
+                            f"🚀最大倍数: {str(round(data_save['topCap'] / data_save['initCap'], 2)) + 'X'}\n"
+                            f"🔥当前倍数: {str(round(nowCap / float(data_save['initCap']), 2)) + 'X'}\n\n"
+                            f"💬大致叙事: {description}\n"
+                            f"🎯发现时间：{find_time}"
+                            )                            
+                            wcf.send_text(info,msg.roomid)
+                            print(info)
                         # 首次出现    
                         else:
+                            description = translate(data2["data"]['socialMedia']['description']) if data2["data"]['socialMedia']['description'] else '暂无叙事'
                             caller_name = caller_simulate_name
                             info = (
                             f"{ca_ca}\n"
@@ -410,9 +444,10 @@ def start_wcf_listener():
                             f"🎯发现时间：{find_time}"
                         )                   
                             wcf.send_text(info,msg.roomid)
-                            caller_simulate_data = [ca_ca,roomid,caller_simulate_name,float(data1["data"]["marketCap"]),find_time]
-                            ca_datas.append(caller_simulate_data)
-                            ca_group_datas.append(ca_group_simulate_datas)
+
+                            store_nested_data_to_redis(roomid, ca_ca, tokenSymbol,caller_name, data1, description, find_time_ms)
+                            data_save = get_nested_data_from_redis(roomid = roomid,ca_ca = ca_ca)
+                            print(data_save)                          
                             print(info)      
                     
                     else:
@@ -456,12 +491,20 @@ def start_top_update():
                 time.sleep(1)
                 # 监测topcap数据是否创新高
                 # 接口URL
-                url = "https://www.okx.com/priapi/v1/dx/market/v2/latest/info?chainId=501&tokenContractAddress={}".format(ca_ca)
+                sol_id, sol_ca = is_solca(ca_ca)
+                eths_id, eths_ca = is_eths(ca_ca)
 
-                # 发送GET请求
-                response = requests.get(url)
+                if sol_id :               
+                    url = "https://www.okx.com/priapi/v1/dx/market/v2/latest/info?chainId={}&tokenContractAddress={}".format(sol_id,ca_ca)
+                    # 发送GET请求
+                    response = requests.get(url)
 
-                # 检查请求是否成功
+                else:
+                    url = "https://www.okx.com/priapi/v1/dx/market/v2/latest/info?chainId={}&tokenContractAddress={}".format(eths_id,ca_ca)
+                    response = requests.get(url)
+
+                
+               # 检查请求是否成功
                 if response.status_code == 200:
                     data2 = response.json()  # 解析JSON响应
                     newCap = float(data2["data"]["price"]) * data1['circulatingSupply']
@@ -605,8 +648,12 @@ r = redis.StrictRedis(host='localhost', port=6379, db=0, decode_responses=True)
 
 # '53951514521@chatroom'
 groups = ["51641835076@chatroom",'52173635194@chatroom']
-#ca_datas = {}
-#ca_group_datas = []
+
 
 start_all_tasks()
 
+""" T = is_pump('FiUGrUV1mq2pyGjxMK3jpRed5CsuqX1QPzqZJpvJpump')
+L = is_pump('XgJcy1kER1tLgM4mskd7UG3feJvTqtdDSkV3EXxpump')
+
+print(T)
+print(L) """
