@@ -19,6 +19,7 @@ import time
 import json
 import redis
 import random
+import datetime
 
 stop_event = threading.Event()  # 控制线程停止的事件
 
@@ -202,7 +203,9 @@ def start_wcf_listener():
                             pool_create_time = data2["data"]["memeInfo"]["createTime"]
                         find_pool_create_time = '未发现'
                         if(pool_create_time > 0):
-                            find_pool_create_time = pool_create_time.strftime("%m-%d %H:%M:%S")
+                            dt_object = datetime.datetime.fromtimestamp(pool_create_time/1000)
+                            find_pool_create_time = dt_object.strftime('%m-%d %H:%M:%S')  # 格式：年-月-日 时:分:秒
+
 
 
                         # 对社交信息进行验证
@@ -568,7 +571,7 @@ def get_pool_create_time(chainId,address):
             else:
                 if pool_create_time < create_timestamp:
                     pool_create_time = create_timestamp
-    
+    print(pool_create_time)
     return pool_create_time
 
 
@@ -604,5 +607,13 @@ groups = ["51641835076@chatroom",'52173635194@chatroom']
 #ca_datas = {}
 #ca_group_datas = []
 
-start_all_tasks()
+# start_all_tasks()
 # get_binance_price("BTC");
+
+pool_create_time = get_pool_create_time(501, "3k2MXyVhnU1PAhCbVKVVK8kyL4pWHHZ8d8H34TJppump")
+
+# find_pool_create_time = pool_create_time.strftime("%m-%d %H:%M:%S")
+dt_object = datetime.datetime.fromtimestamp(pool_create_time/1000)
+formatted_time = dt_object.strftime('%Y-%m-%d %H:%M:%S')  # 格式：年-月-日 时:分:秒
+
+print(formatted_time)
