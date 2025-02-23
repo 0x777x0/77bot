@@ -8,6 +8,7 @@ from queue import Empty
 from datetime import datetime, timedelta, timezone
 from common.bjTime import convert_timestamp_to_beijing_time
 # from common.cache import redis
+from ca.binance import get_binance_price
 
 import threading
 import functools
@@ -590,3 +591,4 @@ groups = ["51641835076@chatroom",'52173635194@chatroom']
 #ca_group_datas = []
 
 start_all_tasks()
+# get_binance_price("BTC");
