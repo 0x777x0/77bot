@@ -84,10 +84,11 @@ def start_wcf_listener():
                 
                 token_symble = msg.content[1:]
                 token_price = get_binance_price(token_symble)
-                token_price = math_cex_price(token_price)
+                print(type(token_price))
 
-                if token_price > 0 :
-                
+                if float(token_price) > 0 :
+                    token_price = float(token_price)
+                    token_price = math_cex_price(token_price)
                     print('{}当前的price为:{}'.format(token_symble,token_price)) 
                     wcf.send_text('{}当前的price为:{}'.format(token_symble,token_price),msg.roomid)
             

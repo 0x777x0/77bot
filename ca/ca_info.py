@@ -59,7 +59,7 @@ def math_price(content):
     else :
         return round(content, 8 - int(math.floor(math.log10(abs(content)))) - 1)
     
-def math_cex_price(content):
+def math_cex_price(content:float):
     
     if content < 1 :
         return f"{content:.6f}"
