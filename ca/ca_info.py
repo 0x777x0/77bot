@@ -85,6 +85,17 @@ def math_bjtime():
     formatted_time = beijing_time.strftime("%m-%d %H:%M:%S")   
     
     return formatted_time
+
+
+def is_cexToken(text):
+    """
+    检查文本是否是 /+字母或数字的组合（不区分大小写），且总长度不超过 15 位。
+
+    :param text: 要检查的文本
+    :return: 如果匹配返回 True，否则返回 False
+    """
+    pattern = r'^/[a-zA-Z0-9]{1,14}$'  # 正则表达式模式
+    return bool(re.match(pattern, text))
     
   
 

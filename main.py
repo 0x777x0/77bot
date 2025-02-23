@@ -1,12 +1,13 @@
 
 from wcferry import Wcf
 from queue import Empty
-from ca.ca_info import is_solca, is_eths, math_price, math_km, math_percent, math_bjtime, get_bundles
+from ca.ca_info import is_solca, is_eths, math_price, math_km, math_percent, math_bjtime, get_bundles, is_cexToken
 from common.socialMedia_info import is_x, is_web, is_TG
 from common.translate import translate
 from queue import Empty
 from datetime import datetime, timedelta, timezone
 from common.bjTime import convert_timestamp_to_beijing_time
+from ca.binance import get_binance_price
 # from common.cache import redis
 
 import threading
@@ -76,6 +77,18 @@ def start_wcf_listener():
                 # wcf.send_text(msg.roomid,msg.roomid)
                 
                 print(msg.roomid) 
+            
+
+            if msg.from_group() and is_cexToken(msg.content) :
+                
+                token_symble = msg.content[1:]
+
+                token_price = get_binance_price(token_symble)
+                
+                print('{}当前的price为:{}'.format(token_symble,token_price)) 
+                wcf.send_text('{}当前的price为:{}'.format(token_symble,token_price),msg.roomid)
+
+
                 
             if msg.from_group() and msg.content == "/top" and msg.roomid in groups:
                 roomid = msg.roomid
@@ -94,7 +107,7 @@ def start_wcf_listener():
                     top_10_rankings = rankings[:10]
                     
                     # 排行榜标题
-                    leaderboard_msg = "🎉🎊🏅🎊🎉🏅🎉🎊🏅🎊🎉"
+                    leaderboard_msg = "🎉🎊🏅🎊🎉🏅🎉🎊🏅🎊🎉\n"
                     leaderboard_msg += "🏆🌟     Top10  排行榜    🌟🏆\n"
                     leaderboard_msg += "━ ━ ━ ━ ━ ━ ━ ━ ━ ━ ━\n"
                     
@@ -400,11 +413,12 @@ def start_wcf_listener():
 
 # 每5分钟更新top数据和最高倍数数据
 def start_top_update():
-    print('开始更新排行榜数据')
+    
     # 初始化全局 rankings 字典，用于存储每个群组的排行榜数据
     global_rankings = {roomid: [] for roomid in groups}
 
     while not stop_event.is_set():
+        print('开始更新排行榜数据')
         time.sleep(30)  # 300 秒 = 5 分钟
         for roomid in groups:
             # 获取该分组下的所有合约代币
