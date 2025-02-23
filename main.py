@@ -19,7 +19,6 @@ import time
 import json
 import redis
 import random
-import datetime
 
 stop_event = threading.Event()  # 控制线程停止的事件
 
@@ -81,15 +80,17 @@ def start_wcf_listener():
                 print(msg.roomid) 
             
 
-            if msg.from_group() and is_cexToken(msg.content) :
+            if msg.from_group() and is_cexToken(msg.content) and msg.from_group()!= 'top' and msg.roomid in groups :
                 
                 token_symble = msg.content[1:]
 
                 token_price = get_binance_price(token_symble)
-                
-                print('{}当前的price为:{}'.format(token_symble,token_price)) 
-                wcf.send_text('{}当前的price为:{}'.format(token_symble,token_price),msg.roomid)
 
+                if token_price > 0 :
+                
+                    print('{}当前的price为:{}'.format(token_symble,token_price)) 
+                    wcf.send_text('{}当前的price为:{}'.format(token_symble,token_price),msg.roomid)
+            
 
                 
             if msg.from_group() and msg.content == "/top" and msg.roomid in groups:
@@ -203,7 +204,7 @@ def start_wcf_listener():
                             pool_create_time = data2["data"]["memeInfo"]["createTime"]
                         find_pool_create_time = '未发现'
                         if(pool_create_time > 0):
-                            dt_object = datetime.datetime.fromtimestamp(pool_create_time/1000)
+                            dt_object = datetime.fromtimestamp(pool_create_time/1000)
                             find_pool_create_time = dt_object.strftime('%m-%d %H:%M:%S')  # 格式：年-月-日 时:分:秒
 
 
@@ -265,7 +266,7 @@ def start_wcf_listener():
                             f"🔥当前倍数: {str(round(nowCap / float(data_save['initCap']), 2)) + 'X'}\n\n"
                             f"💬大致叙事: {description}\n"
                             f"🎯发现时间：{find_time}\n"
-                            f"🎯发现时间：{find_pool_create_time}"
+                            f"🎯创建时间：{find_pool_create_time}"
                             )                            
                             wcf.send_text(info,msg.roomid)
                             print(info)
@@ -292,7 +293,7 @@ def start_wcf_listener():
                             f"🔥当前倍数: 1.00X\n\n"
                             f"💬大致叙事: {description if description else '暂无叙事'}\n"
                             f"🎯发现时间：{find_time}\n"
-                            f"🎯发现时间：{find_pool_create_time}"
+                            f"🎯创建时间：{find_pool_create_time}"
                             )
                     
                             wcf.send_text(info,msg.roomid)
@@ -607,13 +608,5 @@ groups = ["51641835076@chatroom",'52173635194@chatroom']
 #ca_datas = {}
 #ca_group_datas = []
 
-# start_all_tasks()
-# get_binance_price("BTC");
+start_all_tasks()
 
-pool_create_time = get_pool_create_time(501, "3k2MXyVhnU1PAhCbVKVVK8kyL4pWHHZ8d8H34TJppump")
-
-# find_pool_create_time = pool_create_time.strftime("%m-%d %H:%M:%S")
-dt_object = datetime.datetime.fromtimestamp(pool_create_time/1000)
-formatted_time = dt_object.strftime('%Y-%m-%d %H:%M:%S')  # 格式：年-月-日 时:分:秒
-
-print(formatted_time)
