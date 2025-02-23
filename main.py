@@ -1,7 +1,7 @@
 
 from wcferry import Wcf
 from queue import Empty
-from ca.ca_info import is_solca, is_eths, math_price, math_km, math_percent, math_bjtime, get_bundles, is_cexToken, is_pump
+from ca.ca_info import is_solca, is_eths, math_price, math_cex_price, math_km, math_percent, math_bjtime, get_bundles, is_cexToken, is_pump
 from common.socialMedia_info import is_x, is_web, is_TG
 from common.translate import translate
 from queue import Empty
@@ -83,8 +83,8 @@ def start_wcf_listener():
             if msg.from_group() and is_cexToken(msg.content) and msg.content!= 'top' and msg.roomid in groups :
                 
                 token_symble = msg.content[1:]
-
                 token_price = get_binance_price(token_symble)
+                token_price = math_cex_price(token_price)
 
                 if token_price > 0 :
                 
@@ -207,7 +207,7 @@ def start_wcf_listener():
                         if(pool_create_time == 0):
                             #无法从raydium 就获取代币创建时间表示pump
                             pool_create_time = data2["data"]["memeInfo"]["createTime"]
-                        find_pool_create_time = '未发现'
+                        find_pool_create_time = '暂未发现'
                         
                         if(pool_create_time > 0):
                             dt_object = datetime.fromtimestamp(pool_create_time/1000)

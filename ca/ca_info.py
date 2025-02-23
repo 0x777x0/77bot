@@ -58,6 +58,13 @@ def math_price(content):
         return f"{content:.8f}"
     else :
         return round(content, 8 - int(math.floor(math.log10(abs(content)))) - 1)
+    
+def math_cex_price(content):
+    
+    if content < 1 :
+        return f"{content:.6f}"
+    else :
+        return round(content, 8 - int(math.floor(math.log10(abs(content)))) - 1)
         
 def math_km(content):
     
