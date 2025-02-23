@@ -2,6 +2,7 @@ import re
 import math
 import pytz
 import logging
+import json
 from common.cache import redis
 import requests
 
@@ -97,7 +98,23 @@ def is_cexToken(text):
     pattern = r'^/[a-zA-Z0-9]{1,14}$'  # 正则表达式模式
     return bool(re.match(pattern, text))
     
-  
+def is_pump(address):
+    # true 就是在内盘 false 外盘
+    url = f"https://api.quickcar.io/sol/api/getPump?address={address}"
+    
+    # 发送 GET 请求
+    response = requests.get(url)
+
+    # 获取响应内容
+    value = response.text
+
+    # 如果返回为空，直接返回
+    if not value:
+        return False
+    
+    data = json.loads(value)  # 将响应内容转换为字典
+    externalMarket = data.get("data").get("externalMarket")
+    return externalMarket
 
 
 def get_bundles(address):
