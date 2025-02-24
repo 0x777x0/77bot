@@ -93,6 +93,88 @@ def start_wcf_listener():
                     print('{}当前的price为:{}'.format(token_symble,token_price)) 
                     wcf.send_text('{}当前的price为:{}'.format(token_symble,token_price),msg.roomid)
             
+            # 记录用户发言次数（使用昵称）
+            if msg.from_group() and msg.roomid in groups:
+                user_wxid = msg.sender
+
+                # 检查 sender 是否是群 roomid
+                if user_wxid == msg.roomid:
+                    continue  # 跳过群 roomid，不记录
+
+                # 获取用户昵称
+                chatroom_members = wcf.get_chatroom_members(roomid=msg.roomid) or {}
+                user_name = chatroom_members.get(user_wxid, user_wxid)  # 如果没有昵称，使用微信ID
+                
+                # 使用 Redis 记录用户发言次数（以昵称为键）
+                redis_key = f"activity_{msg.roomid}"
+                r.hincrby(redis_key, user_wxid, 1)  # 每次发言增加1
+
+            #roomid = msg.roomid
+                        #caller_wxid = msg.sender
+                        #chatroom_members = wcf.get_chatroom_members(roomid = roomid)
+                        #caller_simulate_name = chatroom_members[caller_wxid]   
+
+
+
+            
+            if msg.from_group() and msg.content.startswith("/活跃") and msg.roomid in groups:
+                # 获取页码（例如 /huo1 会得到页码 1）
+                try:
+                    page_number = int(msg.content[3:])  # 获取页码（从/huo后面的数字提取）
+                except ValueError:
+                    wcf.send_text("请输入正确的页码，例如 /huo1、/huo2 等", msg.roomid)
+                    continue
+
+                # 获取活跃度数据
+                redis_key = f"activity_{msg.roomid}"
+                activity_data = r.hgetall(redis_key)  # 获取活跃度数据
+
+                # 获取群成员昵称映射
+                chatroom_members = wcf.get_chatroom_members(roomid=msg.roomid) or {}
+
+                # 处理活跃度数据：把 wxid 转换为昵称
+                user_activity = [
+                    (chatroom_members.get(user, user), int(count))  # 如果找不到昵称，就显示 wxid
+                    for user, count in activity_data.items()
+                ]
+
+                # 按照发言次数降序排序
+                user_activity.sort(key=lambda x: x[1], reverse=True)
+
+                # 每页显示10条数据
+                items_per_page = 10
+                start_index = (page_number - 1) * items_per_page
+                end_index = start_index + items_per_page
+
+                # 截取当前页面的数据
+                page_data = user_activity[start_index:end_index]
+
+                if not page_data:
+                    wcf.send_text(f"第 {page_number} 页没有数据，请确认页码是否正确", msg.roomid)
+                    continue
+
+                # 生成排行榜信息
+                leaderboard_msg = f"🎉   🏅   🎉   🏅   🎉   🏅   🎉\n"
+                leaderboard_msg += f"🏆🌟     活跃度排行榜     🌟🏆\n"
+                leaderboard_msg += "━ ━ ━ ━ ━ ━ ━ ━ ━ ━ ━\n"
+
+                # 修改：从 start_index + 1 开始，确保排名连续
+                for idx, (user_name, count) in enumerate(page_data, start=start_index + 1):
+                    rank_emoji = {1: "🥇👤", 2: "🥈👤", 3: "🥉👤"}.get(idx, f"{idx}.👤")
+                    leaderboard_msg += f"{rank_emoji} {user_name}  : {count} 次\n"
+                    leaderboard_msg += "━ ━ ━ ━ ━ ━ ━ ━ ━ ━ ━\n"
+
+                leaderboard_msg += "🎉🏅  恭喜活跃群友上榜  🏅🎉\n"
+                leaderboard_msg += "🎉   🏅   🎉   🏅   🎉   🏅   🎉"
+
+                # 发送排行榜
+                wcf.send_text(leaderboard_msg, msg.roomid)
+                print(f"已发送活跃度排行榜第 {page_number} 页到分组 {msg.roomid}:\n{leaderboard_msg}")
+
+
+
+ 
+
             # 获取群排行榜数据  
             if msg.from_group() and msg.content == "/top" and msg.roomid in groups:
                 roomid = msg.roomid
@@ -567,6 +649,12 @@ def start_top_update():
                 # 更新最新的查询时间            
                 data1['query_time'] = data_list[-1]['times']  
                 '''
+
+def start_top_update():
+    pass
+
+
+
 
 def get_pool_create_time(chainId,address):
     url = f"https://www.okx.com/priapi/v1/dx/market/pool/list?chainId={chainId}&tokenContractAddress={address}"
