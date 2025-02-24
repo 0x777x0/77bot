@@ -2,6 +2,8 @@
 from wcferry import Wcf
 from queue import Empty
 from ca.ca_info import is_solca, is_eths, math_price, math_cex_price, math_km, math_percent, math_bjtime, get_bundles, is_cexToken, is_pump
+from command.command import command_id
+from httpsss.oke import fetch_oke_latest_info, fetch_oke_overview_info
 from common.socialMedia_info import is_x, is_web, is_TG
 from common.translate import translate
 from queue import Empty
@@ -73,13 +75,12 @@ def start_wcf_listener():
             
             if msg.content == "时间llllllllll":
                 wcf.send_text("你好，宇哥，现在时间是："+ math_bjtime(),msg.sender)
-                
-            if msg.from_group() and msg.content == "id" :
-                # wcf.send_text(msg.roomid,msg.roomid)
-                
-                print(msg.roomid) 
-            
 
+            if msg.from_group() and msg.content == "id" :
+                # wcf.send_text(msg.roomid,msg.roomid)                
+                print(msg.roomid)
+
+            # 获取主流代币价格
             if msg.from_group() and is_cexToken(msg.content) and msg.content!= 'top' and msg.roomid in groups :
                 
                 token_symble = msg.content[1:]
@@ -92,8 +93,7 @@ def start_wcf_listener():
                     print('{}当前的price为:{}'.format(token_symble,token_price)) 
                     wcf.send_text('{}当前的price为:{}'.format(token_symble,token_price),msg.roomid)
             
-
-                
+            # 获取群排行榜数据  
             if msg.from_group() and msg.content == "/top" and msg.roomid in groups:
                 roomid = msg.roomid
                 leaderboard_data = r.get(f"leaderboard_{roomid}")
@@ -159,23 +159,12 @@ def start_wcf_listener():
                     find_time = math_bjtime()
                     find_time_ms = int(time.time()*1000)
                     
-                    url1 = "https://www.okx.com/priapi/v1/dx/market/v2/latest/info?chainId={}&tokenContractAddress={}".format(chain_id, ca_ca)
-                    url2= "https://www.okx.com/priapi/v1/dx/market/v2/token/overview/?chainId={}&tokenContractAddress={}".format(chain_id, ca_ca)      
-                    #url3 = "http://47.238.165.188:8080/api/price/get?chain=sol&address={}".format(ca_ca)
- 
-
-                    # 发送GET请求
-                    response1 = requests.get(url1)
-                    response2 = requests.get(url2)
-                    #response3 = requests.get(url3)
+                    # 调okelatest、overview接口
+                    data1 = fetch_oke_latest_info(ca_ca = ca_ca)
+                    data2 = fetch_oke_overview_info(ca_ca = ca_ca)
 
                     # 检查请求是否成功
-                    if response1.status_code == 200 and response2.status_code == 200:
-                        data1 = response1.json()  # 解析JSON响应
-                        data2 = response2.json()
-                        #data3 = response3.json()  
-
-
+                    if data1 and data2 :
 
                         # 获取合约基础信息
                         chain_name = data1["data"]["chainName"]            
@@ -208,16 +197,12 @@ def start_wcf_listener():
                         if(pool_create_time == 0):
                             #无法从raydium 就获取代币创建时间表示pump
                             pool_create_time = data2["data"]["memeInfo"]["createTime"]
-                        find_pool_create_time = '暂未发现'
+                            find_pool_create_time = '暂未发现'
                         
-                        if(pool_create_time > 0):
+                        else:
                             dt_object = datetime.fromtimestamp(pool_create_time/1000)
                             find_pool_create_time = dt_object.strftime('%m-%d %H:%M:%S')  # 格式：年-月-日 时:分:秒
-
-
-
-                                         
-                        
+               
 
                         # 记录哨兵caller信息
                         # 先拿到当前caller的昵称
@@ -299,19 +284,16 @@ def start_wcf_listener():
                             f"💬大致叙事: {description if description else '暂无叙事'}\n"
                             f"🎯发现时间：{find_time}\n"
                             f"🎯{cp_time}:{find_pool_create_time}"
-                            )
-                    
+                            )                   
                             wcf.send_text(info,msg.roomid)
                         
                             # 记录每个群组，每个合约，从被发现后，上涨的最大倍数
-                            # 一条喊单记录   群组 ca 简写 喊单人 链 初始市值 最高市值 叙事 喊单时间， 最新查询时间，  单次查询到的数据为 供应量 和 价格序列
-                            
+                            # 一条喊单记录   群组 ca 简写 喊单人 链 初始市值 最高市值 叙事 喊单时间， 最新查询时间，  单次查询到的数据为 供应量 和 价格序列                           
                             store_nested_data_to_redis(roomid, ca_ca, tokenSymbol,caller_name, data1, description, find_time_ms)
                             data_save = get_nested_data_from_redis(roomid = roomid,ca_ca = ca_ca)
                             print(data_save)
                             #redis_key = "ca_group_simulate_datas_list"
                             #r.rpush(redis_key, *ca_group_simulate_datas)
-
 
                             #ca_datas[roomid][ca_ca] = {
                                 #'caller_name':caller_name,
@@ -476,7 +458,7 @@ def start_top_update():
 
     while not stop_event.is_set():
         print('开始更新排行榜数据')
-        time.sleep(30)  # 300 秒 = 5 分钟
+        time.sleep(300)  # 300 秒 = 5 分钟
         for roomid in groups:
             # 获取该分组下的所有合约代币
             ca_data = r.hgetall(roomid)
@@ -489,7 +471,7 @@ def start_top_update():
 
             for ca_ca, data_json in ca_data.items():
                 data1 = json.loads(data_json)
-                time.sleep(1)
+                time.sleep(2)
                 # 监测topcap数据是否创新高
                 # 接口URL
                 sol_id, sol_ca = is_solca(ca_ca)
