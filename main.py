@@ -70,6 +70,8 @@ def start_wcf_listener():
         try:
             msg = wcf.get_msg()
             # 处理消息的逻辑...
+            time.sleep(1)
+
             if msg.content == "滚kkkkkkkkkkk":
                 wcf.send_text("好的，小瓜瓜，爱你爱你哦,周末一起玩",msg.sender)
             
@@ -81,7 +83,7 @@ def start_wcf_listener():
                 print(msg.roomid)
 
             # 获取主流代币价格
-            if msg.from_group() and is_cexToken(msg.content) and msg.content!= 'top' and msg.roomid in groups :
+            if msg.from_group() and is_cexToken(msg.content) and msg.content!= '/top' and msg.roomid in groups :
                 
                 token_symble = msg.content[1:]
                 token_price = get_binance_price(token_symble)
@@ -193,7 +195,7 @@ def start_wcf_listener():
                     top_10_rankings = rankings[:10]
                     
                     # 排行榜标题
-                    leaderboard_msg = "🎉🎊🏅🎊🎉🏅🎉🎊🏅🎊🎉\n"
+                    leaderboard_msg = "🎉   🏅   🎉   🏅   🎉   🏅   🎉\n"
                     leaderboard_msg += "🏆🌟     Top10  排行榜    🌟🏆\n"
                     leaderboard_msg += "━ ━ ━ ━ ━ ━ ━ ━ ━ ━ ━\n"
                     
@@ -218,8 +220,8 @@ def start_wcf_listener():
                         leaderboard_msg += "\n⚠️ 当前排行榜数据不足 10 条\n"
                     
                     # 排行榜底部装饰
-                    leaderboard_msg += "🎉🎊🏅恭喜老板上榜🏅🎊🎉\n"
-                    leaderboard_msg += "🎉🎊🏅🎊🎉🏅🎉🎊🏅🎊🎉"
+                    leaderboard_msg += "🎉🏅  恭喜老板上榜  🏅🎉\n"
+                    leaderboard_msg += "🎉   🏅   🎉   🏅   🎉   🏅   🎉"
                     
                     wcf.send_text(leaderboard_msg, roomid)
                     print(f"已发送排行榜到分组 {roomid}:\n{leaderboard_msg}")
@@ -540,7 +542,7 @@ def start_top_update():
 
     while not stop_event.is_set():
         print('开始更新排行榜数据')
-        time.sleep(300)  # 300 秒 = 5 分钟
+        time.sleep(30)  # 300 秒 = 5 分钟
         for roomid in groups:
             # 获取该分组下的所有合约代币
             ca_data = r.hgetall(roomid)
@@ -571,6 +573,7 @@ def start_top_update():
                 
                # 检查请求是否成功
                 if response.status_code == 200:
+                    print('开始检测{}的---{}'.format(roomid,data1['tokenSymbol']))
                     data2 = response.json()  # 解析JSON响应
                     newCap = float(data2["data"]["price"]) * data1['circulatingSupply']
                     random_number = round(random.uniform(1.10, 1.20), 2)
@@ -650,7 +653,7 @@ def start_top_update():
                 data1['query_time'] = data_list[-1]['times']  
                 '''
 
-def start_top_update():
+def start_to_update():
     pass
 
 
