@@ -61,8 +61,8 @@ def get_data_from_redis(redis_key):
 
 
 # 启动微信消息监听的线程
-def start_wcf_listener():
-    wcf = Wcf()
+def start_wcf_listener(wcf):
+
     wcf.enable_receiving_msg()
     print('机器人启动')
 
@@ -75,7 +75,7 @@ def start_wcf_listener():
             if msg.content == "滚kkkkkkkkkkk":
                 wcf.send_text("好的，小瓜瓜，爱你爱你哦,周末一起玩",msg.sender)
             
-            if msg.content == "时间llllllllll":
+            if msg.content == "时间1":
                 wcf.send_text("你好，宇哥，现在时间是："+ math_bjtime(),msg.sender)
 
             if msg.from_group() and msg.content == "id" :
@@ -201,9 +201,9 @@ def start_wcf_listener():
                     
                     for idx, entry in enumerate(top_10_rankings, start=1):
                         if idx == 1:
-                            rank_emoji = "🥇🎖️🔥👤"  # 第一名
+                            rank_emoji = "🥇👤"  # 第一名
                         elif idx == 2:
-                            rank_emoji = "🥈🎖️👤"  # 第二名
+                            rank_emoji = "🥈👤"  # 第二名
                         elif idx == 3:
                             rank_emoji = "🥉👤"  # 第三名
                         else:
@@ -220,7 +220,7 @@ def start_wcf_listener():
                         leaderboard_msg += "\n⚠️ 当前排行榜数据不足 10 条\n"
                     
                     # 排行榜底部装饰
-                    leaderboard_msg += "🎉🏅  恭喜老板上榜  🏅🎉\n"
+                    leaderboard_msg += "🎉🏅   恭喜老板上榜   🏅🎉\n"
                     leaderboard_msg += "🎉   🏅   🎉   🏅   🎉   🏅   🎉"
                     
                     wcf.send_text(leaderboard_msg, roomid)
@@ -246,10 +246,12 @@ def start_wcf_listener():
                     # 调okelatest、overview接口
                     data1 = fetch_oke_latest_info(ca_ca = ca_ca)
                     data2 = fetch_oke_overview_info(ca_ca = ca_ca)
-
+                    print('来到了这里1111')
+                    print(data1)
+                    print(data2)
                     # 检查请求是否成功
                     if data1 and data2 :
-
+                        print('来到了这里2222')
                         # 获取合约基础信息
                         chain_name = data1["data"]["chainName"]            
                         tokenSymbol = data1["data"]["tokenSymbol"]
@@ -273,7 +275,7 @@ def start_wcf_listener():
                         twitter_info = is_x(twitter) 
                         officialWebsite_info = is_web(officialWebsite)
                         telegram_info = is_TG(telegram)  
-
+                        
                         # 获取池子创建时间
                         #先从raydium 获取时间
                         pool_create_time = get_pool_create_time(chain_id, ca_ca)
@@ -286,19 +288,24 @@ def start_wcf_listener():
                         else:
                             dt_object = datetime.fromtimestamp(pool_create_time/1000)
                             find_pool_create_time = dt_object.strftime('%m-%d %H:%M:%S')  # 格式：年-月-日 时:分:秒
-               
-
+                         
+                        print('拿到数据了')
                         # 记录哨兵caller信息
                         # 先拿到当前caller的昵称
                         roomid = msg.roomid
                         caller_wxid = msg.sender
+                        
                         chatroom_members = wcf.get_chatroom_members(roomid = roomid)
+                        print(chatroom_members)
                         caller_simulate_name = chatroom_members[caller_wxid]
+                        print('拿到数据了')
                         # 将caller喊单信息组装成模拟数据
                         ca_group_simulate_datas = [roomid,ca_ca]
                         redis_key = 'ca_group_simulate_datas'
                         ca_group_datas = get_data_from_redis(redis_key)
                         data_save = get_nested_data_from_redis(roomid = roomid,ca_ca = ca_ca)
+
+                        
                         # 判断该ca在当前群组是不是首次出现
                         if data_save :
                             # 如果是再次出现，则需要找到哨兵数据
@@ -541,12 +548,14 @@ def start_top_update():
     global_rankings = {roomid: [] for roomid in groups}
 
     while not stop_event.is_set():
-        print('开始更新排行榜数据')
-        time.sleep(30)  # 300 秒 = 5 分钟
+        updata_time = math_bjtime()
+
+        print('----{}----开始更新排行榜数据'.format(updata_time))
+        time.sleep(3000)  # 300 秒 = 5 分钟
         for roomid in groups:
             # 获取该分组下的所有合约代币
             ca_data = r.hgetall(roomid)
-            print(ca_data)
+            # print(ca_data)
             if not ca_data:
                 continue
 
@@ -573,7 +582,7 @@ def start_top_update():
                 
                # 检查请求是否成功
                 if response.status_code == 200:
-                    print('开始检测{}的---{}'.format(roomid,data1['tokenSymbol']))
+                    print('开始检测----{}----的---{}----'.format(roomid,data1['tokenSymbol']))
                     data2 = response.json()  # 解析JSON响应
                     newCap = float(data2["data"]["price"]) * data1['circulatingSupply']
                     random_number = round(random.uniform(1.10, 1.20), 2)
@@ -653,8 +662,33 @@ def start_top_update():
                 data1['query_time'] = data_list[-1]['times']  
                 '''
 
-def start_to_update():
-    pass
+
+def getMyLastestGroupMsgID() -> dict:
+    dbs = self.wcf.get_dbs()
+    db = "MSG0.db"
+    for _db in dbs:
+      if _db[:3] == "MSG" and _db[-3:] ==".db":
+        db = _db 
+    msgs = self.wcf.query_sql(db, f"SELECT * FROM MSG WHERE IsSender = 1 and TalkerId =2 ORDER BY MsgSequence DESC LIMIT 1;")
+
+    return msgs[0].get("MsgSvrID")  if msgs else 0
+
+
+
+def recover_message(wcf):
+   while not stop_event.is_set():
+        try:
+            msg = wcf.get_msg()
+            #if '捆绑比例' in msg.content and '大致叙事' in msg.content :  # 判断消息是否是自己发送的
+                #print(f"发现自己的消息: {12345679}")
+            msg_id = getMyLastestGroupMsgID()
+            time.sleep(5)  # 等待1.4秒
+            result = wcf.revoke_msg(msg_id)  # 撤回消息
+            print(f"撤回消息结果: {result}")
+        except Empty:
+            continue
+        except Exception as e:
+            print(f"撤回消息时出错: {e}")
 
 
 
@@ -697,13 +731,20 @@ def get_pool_create_time(chainId,address):
 # 启动更新top10的 的线程
 # 启动所有线程
 def start_all_tasks():
+    wcf = Wcf()
+
+
     # 启动微信监听线程
-    wcf_listener_thread = threading.Thread(target=start_wcf_listener)
+    wcf_listener_thread = threading.Thread(target=start_wcf_listener, args=(wcf,))
     wcf_listener_thread.start()
 
     # 启动排行榜更新线程
     top_update_thread = threading.Thread(target=start_top_update)
     top_update_thread.start()
+
+    # 启动撤回消息的线程
+    recover_message_thread = threading.Thread(target=recover_message, args=(wcf,))
+    recover_message_thread.start()
 
     # 等待线程结束（如果需要的话）
     try:
@@ -713,6 +754,7 @@ def start_all_tasks():
         stop_event.set()
         wcf_listener_thread.join()
         top_update_thread.join()
+        #recover_message_thread.join()
         print("已停止所有任务")
 
 
@@ -721,7 +763,7 @@ def start_all_tasks():
 r = redis.StrictRedis(host='localhost', port=6379, db=0, decode_responses=True)
 
 # '53951514521@chatroom'
-groups = ["51641835076@chatroom",'52173635194@chatroom']
+groups = ["51641835076@chatroom",'52173635194@chatroom','56237602490@chatroom']
 
 
 start_all_tasks()
