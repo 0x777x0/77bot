@@ -21,6 +21,7 @@ import time
 import json
 import redis
 import random
+import string
 
 stop_event = threading.Event()  # 控制线程停止的事件
 
@@ -61,11 +62,11 @@ def get_data_from_redis(redis_key):
 
 
 # 启动微信消息监听的线程
-def start_wcf_listener(wcf):
-
+def start_wcf_listener():
+    global message_number
     wcf.enable_receiving_msg()
     print('机器人启动')
-
+    
     while wcf.is_receiving_msg():
         try:
             msg = wcf.get_msg()
@@ -79,7 +80,17 @@ def start_wcf_listener(wcf):
                 wcf.send_text("你好，宇哥，现在时间是："+ math_bjtime(),msg.sender)
 
             if msg.from_group() and msg.content == "id" :
-                # wcf.send_text(msg.roomid,msg.roomid)                
+            
+                random_string = ''.join(random.choices(string.ascii_letters + string.digits, k=14))
+
+                
+                info = '123456'+ '\n' + str(random_string) 
+                wcf.send_text(info,msg.roomid)  
+                timestamp_ms = int(time.time() * 1000)
+                time.sleep(1)
+                old_news_id =  getMyLastestGroupMsgID(keyword=random_string)  
+                print(old_news_id)
+                old_news.append([old_news_id,timestamp_ms])          
                 print(msg.roomid)
 
             # 获取主流代币价格
@@ -328,7 +339,8 @@ def start_wcf_listener(wcf):
                             nowCap = float(data1["data"]["price"])*float(data1["data"]["circulatingSupply"])
                         
                             print(data_save)
-                            
+                            random_string = ''.join(random.choices(string.ascii_letters + string.digits, k=14))
+
                             info = (
                             f"{ca_ca}\n"
                             f"简写：{tokenSymbol}\n"
@@ -344,11 +356,18 @@ def start_wcf_listener(wcf):
                             f"📈Call: {math_km(data_save['initCap'])} -> {math_km(data_save['topCap'])}\n"
                             f"🚀最大倍数: {str(round(data_save['topCap'] / data_save['initCap'], 2)) + 'X'}\n"
                             f"🔥当前倍数: {str(round(nowCap / float(data_save['initCap']), 2)) + 'X'}\n\n"
-                            f"💬大致叙事: {description}\n"
+                            f"💬大致叙事: {description} {random_string} \n"
                             f"🎯发现时间：{find_time}\n"
                             f"🎯创建时间：{find_pool_create_time}"
-                            )                            
+                            #f"{message_number}"
+                            ) 
+                                                       
                             wcf.send_text(info,msg.roomid)
+                            timestamp_ms = int(time.time() * 1000)
+                            time.sleep(1)
+                            old_news_id =  getMyLastestGroupMsgID(keyword=random_string)  
+                            print(old_news_id)
+                            old_news.append([old_news_id,timestamp_ms])
                             print(info)
                             
                             
@@ -357,6 +376,7 @@ def start_wcf_listener(wcf):
                             cp_time = '发射时间' if is_pump(ca_ca) else '创建时间'
                             description = translate(data2["data"]['socialMedia']['description']) if data2["data"]['socialMedia']['description'] else '暂无叙事'
                             caller_name = caller_simulate_name
+                            random_string = ''.join(random.choices(string.ascii_letters + string.digits, k=14))
                             info = (
                             f"{ca_ca}\n"
                             f"简写：{tokenSymbol}\n"
@@ -372,11 +392,16 @@ def start_wcf_listener(wcf):
                             f"📈Call: {marketCap} -> {marketCap}\n"
                             f"🚀最大倍数: 1.00X\n"
                             f"🔥当前倍数: 1.00X\n\n"
-                            f"💬大致叙事: {description if description else '暂无叙事'}\n"
+                            f"💬大致叙事: {description if description else '暂无叙事'} {random_string}\n"
                             f"🎯发现时间：{find_time}\n"
                             f"🎯{cp_time}:{find_pool_create_time}"
                             )                   
                             wcf.send_text(info,msg.roomid)
+                            timestamp_ms = int(time.time() * 1000)
+                            time.sleep(1)
+                            old_news_id =  getMyLastestGroupMsgID(keyword=random_string)  
+                            print(old_news_id)
+                            old_news.append([old_news_id,timestamp_ms])
                         
                             # 记录每个群组，每个合约，从被发现后，上涨的最大倍数
                             # 一条喊单记录   群组 ca 简写 喊单人 链 初始市值 最高市值 叙事 喊单时间， 最新查询时间，  单次查询到的数据为 供应量 和 价格序列                           
@@ -474,7 +499,7 @@ def start_wcf_listener(wcf):
                             nowCap = float(data1["data"]["price"])*float(data1["data"]["circulatingSupply"])
                         
                             print(data_save)
-                            
+                            random_string = ''.join(random.choices(string.ascii_letters + string.digits, k=14))
                             info = (
                             f"{ca_ca}\n"
                             f"简写：{tokenSymbol}\n"
@@ -490,15 +515,22 @@ def start_wcf_listener(wcf):
                             f"📈Call: {math_km(data_save['initCap'])} -> {math_km(data_save['topCap'])}\n"
                             f"🚀最大倍数: {str(round(data_save['topCap'] / data_save['initCap'], 2)) + 'X'}\n"
                             f"🔥当前倍数: {str(round(nowCap / float(data_save['initCap']), 2)) + 'X'}\n\n"
-                            f"💬大致叙事: {description}\n"
+                            f"💬大致叙事: {description} {random_string}\n"
                             f"🎯发现时间：{find_time}"
                             )                            
                             wcf.send_text(info,msg.roomid)
+
+                            timestamp_ms = int(time.time() * 1000)
+                            time.sleep(1)
+                            old_news_id =  getMyLastestGroupMsgID(keyword=random_string)  
+                            print(old_news_id)
+                            old_news.append([old_news_id,timestamp_ms])
                             print(info)
                         # 首次出现    
                         else:
                             description = translate(data2["data"]['socialMedia']['description']) if data2["data"]['socialMedia']['description'] else '暂无叙事'
                             caller_name = caller_simulate_name
+                            random_string = ''.join(random.choices(string.ascii_letters + string.digits, k=14))
                             info = (
                             f"{ca_ca}\n"
                             f"链: {chain_name}\n"
@@ -514,10 +546,16 @@ def start_wcf_listener(wcf):
                             f"📈Call: {marketCap} -> {marketCap}\n"
                             f"🚀最大倍数: 1.00X\n"
                             f"🔥当前倍数: 1.00X\n\n"
-                            f"💬大致叙事: {description if description else '暂无叙事'}\n"
+                            f"💬大致叙事: {description if description else '暂无叙事'} {random_string}\n"
                             f"🎯发现时间：{find_time}"
                         )                   
                             wcf.send_text(info,msg.roomid)
+
+                            timestamp_ms = int(time.time() * 1000)
+                            time.sleep(1)
+                            old_news_id =  getMyLastestGroupMsgID(keyword=random_string)  
+                            print(old_news_id)
+                            old_news.append([old_news_id,timestamp_ms])
 
                             store_nested_data_to_redis(roomid, ca_ca, tokenSymbol,caller_name, data1, description, find_time_ms)
                             data_save = get_nested_data_from_redis(roomid = roomid,ca_ca = ca_ca)
@@ -663,32 +701,54 @@ def start_top_update():
                 '''
 
 
-def getMyLastestGroupMsgID() -> dict:
-    dbs = self.wcf.get_dbs()
+def getMyLastestGroupMsgID(keyword) -> dict:
+
+    dbs = wcf.get_dbs()
     db = "MSG0.db"
     for _db in dbs:
-      if _db[:3] == "MSG" and _db[-3:] ==".db":
-        db = _db 
-    msgs = self.wcf.query_sql(db, f"SELECT * FROM MSG WHERE IsSender = 1 and TalkerId =2 ORDER BY MsgSequence DESC LIMIT 1;")
+        if _db[:3] == "MSG" and _db[-3:] == ".db":
+            db = _db
 
-    return msgs[0].get("MsgSvrID")  if msgs else 0
+    sql = f"SELECT * FROM MSG WHERE IsSender = 1 and strContent LIKE '%{keyword}%' ORDER BY localId DESC LIMIT 10;"
+    msgs = wcf.query_sql(db, sql)
+    print(msgs)
+    return msgs[0].get("MsgSvrID") if msgs else 0
 
 
 
-def recover_message(wcf):
-   while not stop_event.is_set():
+
+
+    sql = """
+    select * from MSG 
+    where StrTalker = {} 
+    and StrContent like {} 
+    order by Sequence desc limit 1
+    """.format(room_id, "%" + keyword + "%")
+    msgs = wcf.query_sql("MSG0.db", sql)
+    return msgs[0].get("MsgSvrID") if msgs else 0
+
+
+
+def recover_message():
+    while not stop_event.is_set():
+        time.sleep(10)
+        print('开始撤回消息')
         try:
-            msg = wcf.get_msg()
-            #if '捆绑比例' in msg.content and '大致叙事' in msg.content :  # 判断消息是否是自己发送的
-                #print(f"发现自己的消息: {12345679}")
-            msg_id = getMyLastestGroupMsgID()
-            time.sleep(5)  # 等待1.4秒
-            result = wcf.revoke_msg(msg_id)  # 撤回消息
-            print(f"撤回消息结果: {result}")
+            print(old_news)
+            if len(old_news) > 0:
+                # 反向遍历 old_news，避免删除元素影响索引
+                for i in range(len(old_news) - 1, -1, -1):
+                    timestamp_ms = int(time.time() * 1000)
+                    if timestamp_ms - old_news[i][1] > 100000:  # 10000ms = 10秒  停留1分40秒
+                        result = wcf.revoke_msg(old_news[i][0])
+                        print('撤回消息{}'.format(result))
+                        if result == 1:
+                            del old_news[i]  # 删除已撤回的消息
         except Empty:
             continue
         except Exception as e:
             print(f"撤回消息时出错: {e}")
+
 
 
 
@@ -731,11 +791,9 @@ def get_pool_create_time(chainId,address):
 # 启动更新top10的 的线程
 # 启动所有线程
 def start_all_tasks():
-    wcf = Wcf()
-
-
+    
     # 启动微信监听线程
-    wcf_listener_thread = threading.Thread(target=start_wcf_listener, args=(wcf,))
+    wcf_listener_thread = threading.Thread(target=start_wcf_listener)
     wcf_listener_thread.start()
 
     # 启动排行榜更新线程
@@ -743,7 +801,7 @@ def start_all_tasks():
     top_update_thread.start()
 
     # 启动撤回消息的线程
-    recover_message_thread = threading.Thread(target=recover_message, args=(wcf,))
+    recover_message_thread = threading.Thread(target=recover_message)
     recover_message_thread.start()
 
     # 等待线程结束（如果需要的话）
@@ -758,12 +816,14 @@ def start_all_tasks():
         print("已停止所有任务")
 
 
-
+message_number = 1000000
+wcf = Wcf()
+old_news = []
 
 r = redis.StrictRedis(host='localhost', port=6379, db=0, decode_responses=True)
 
 # '53951514521@chatroom'
-groups = ["51641835076@chatroom",'52173635194@chatroom','56237602490@chatroom']
+groups = ["51641835076@chatroom",'52173635194@chatroom','56237602490@chatroom','58224083481@chatroom']
 
 
 start_all_tasks()
