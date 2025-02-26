@@ -33,7 +33,7 @@ def store_nested_data_to_redis(roomid, ca_ca, tokenSymbol,caller_name, data1, de
     'caller_name': caller_name,
     'initCap': float(data1["data"]["marketCap"]) , 
     'topCap': float(data1["data"]["marketCap"]) , 
-    'circulatingSupply':float(data1["data"]["circulatingSupply"]),
+    'circulatingSupply':float(data1["data"]["circulatingSupply"]) if data1["data"]["circulatingSupply"] else 0,
     'description': description,
     'find_time': find_time_ms,
     'query_time': find_time_ms
@@ -450,11 +450,11 @@ def start_wcf_listener():
                         chain_name = data1["data"]["chainName"]            
                         tokenSymbol = data1["data"]["tokenSymbol"]
                         tokenName = data1["data"]["tokenName"]
-                        price = math_price(float(data1["data"]["price"]))
-                        marketCap = math_km(float(data1["data"]["marketCap"]))
-                        circulatingSupply = data1["data"]["circulatingSupply"]
-                        volume = math_km(float(data1["data"]["volume"]))
-                        holders = data1["data"]["holders"]
+                        price = math_price(float(data1["data"]["price"])) if data1["data"]["price"] else '数据异常'
+                        marketCap = math_km(float(data1["data"]["marketCap"])) if data1["data"]["price"] else '数据异常'
+                        #circulatingSupply = data1["data"]["circulatingSupply"]
+                        volume = math_km(float(data1["data"]["volume"])) if data1["data"]["price"] else '数据异常'
+                        holders = data1["data"]["holders"] if data1["data"]["price"] else '数据异常'
                         top10HoldAmountPercentage = math_percent(float(data1["data"]["top10HoldAmountPercentage"]))             
                         total_holding_percentage  = '功能优化中'
                         roomid = msg.roomid
@@ -739,7 +739,7 @@ def recover_message():
                 # 反向遍历 old_news，避免删除元素影响索引
                 for i in range(len(old_news) - 1, -1, -1):
                     timestamp_ms = int(time.time() * 1000)
-                    if timestamp_ms - old_news[i][1] > 100000:  # 10000ms = 10秒  停留1分40秒
+                    if timestamp_ms - old_news[i][1] > 110000 and old_news[i] != 0 :  # 10000ms = 10秒  停留1分40秒
                         result = wcf.revoke_msg(old_news[i][0])
                         print('撤回消息{}'.format(result))
                         if result == 1:
