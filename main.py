@@ -6,7 +6,6 @@ from command.command import command_id
 from httpsss.oke import fetch_oke_latest_info, fetch_oke_overview_info
 from common.socialMedia_info import is_x, is_web, is_TG
 from common.translate import translate
-from queue import Empty
 from datetime import datetime, timedelta, timezone
 from common.bjTime import convert_timestamp_to_beijing_time
 from ca.binance import get_binance_price
@@ -88,10 +87,20 @@ def start_wcf_listener():
                 wcf.send_text(info,msg.roomid)  
                 timestamp_ms = int(time.time() * 1000)
                 time.sleep(1)
-                old_news_id =  getMyLastestGroupMsgID(keyword=random_string)  
+                old_news_id =  getMyLastestGroupMsgID(keyword=info)  
                 print(old_news_id)
                 old_news.append([old_news_id,timestamp_ms])          
                 print(msg.roomid)
+                
+
+            
+                
+            """ wcf.send_text("fgfdgh223441","58224083481@chatroom")
+            timestamp_ms = int(time.time() * 1000)
+            time.sleep(1)
+            old_news_id =  getMyLastestGroupMsgID(keyword="fgfdgh223441")  
+            print(old_news_id)
+            old_news.append([old_news_id,timestamp_ms]) """
 
             # 获取主流代币价格
             if msg.from_group() and is_cexToken(msg.content) and msg.content!= '/top' and msg.roomid in groups :
@@ -300,16 +309,19 @@ def start_wcf_listener():
                             dt_object = datetime.fromtimestamp(pool_create_time/1000)
                             find_pool_create_time = dt_object.strftime('%m-%d %H:%M:%S')  # 格式：年-月-日 时:分:秒
                          
-                        print('拿到数据了')
+                        print('拿到数据了1')
                         # 记录哨兵caller信息
                         # 先拿到当前caller的昵称
                         roomid = msg.roomid
+                        print(roomid)
                         caller_wxid = msg.sender
                         
                         chatroom_members = wcf.get_chatroom_members(roomid = roomid)
+                        print('拿到数据了2')
                         print(chatroom_members)
-                        caller_simulate_name = chatroom_members[caller_wxid]
-                        print('拿到数据了')
+
+                        caller_simulate_name = chatroom_members[caller_wxid] if (chatroom_members and len(chatroom_members) > 1 )  else '数据暂时异常'
+                        print('拿到数据了3')
                         # 将caller喊单信息组装成模拟数据
                         ca_group_simulate_datas = [roomid,ca_ca]
                         redis_key = 'ca_group_simulate_datas'
@@ -471,7 +483,7 @@ def start_wcf_listener():
 
                         caller_wxid = msg.sender
                         chatroom_members = wcf.get_chatroom_members(roomid=roomid)
-                        caller_simulate_name = chatroom_members[caller_wxid]
+                        caller_simulate_name = chatroom_members[caller_wxid] if (chatroom_members and len(chatroom_members) > 1 )  else '数据暂时异常'
                         # 将caller喊单信息组装成模拟数据
                         ca_group_simulate_datas = [roomid,ca_ca]
                         redis_key = 'ca_group_simulate_datas'
@@ -739,7 +751,7 @@ def recover_message():
                 # 反向遍历 old_news，避免删除元素影响索引
                 for i in range(len(old_news) - 1, -1, -1):
                     timestamp_ms = int(time.time() * 1000)
-                    if timestamp_ms - old_news[i][1] > 110000 and old_news[i] != 0 :  # 10000ms = 10秒  停留1分40秒
+                    if timestamp_ms - old_news[i][1] > 4000 and old_news[i] != 0 :  # 10000ms = 10秒  停留1分40秒
                         result = wcf.revoke_msg(old_news[i][0])
                         print('撤回消息{}'.format(result))
                         if result == 1:
@@ -823,7 +835,7 @@ old_news = []
 r = redis.StrictRedis(host='localhost', port=6379, db=0, decode_responses=True)
 
 # '53951514521@chatroom'
-groups = ["51641835076@chatroom",'52173635194@chatroom','56237602490@chatroom','58224083481@chatroom']
+groups = ["58224083481@chatroom"]
 
 
 start_all_tasks()
