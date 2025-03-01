@@ -14,7 +14,7 @@ wcf.enable_receiving_msg()
 print('机器人启动')
 
 def add_wx_info(roomid,wxId,wxNick,address,times):
-    url = f"http://localhost:8080/api/wxInfo/add"
+    url = f"http://47.238.165.188:8080/api/wxInfo/add"
     headers = {
     "Content-Type": "application/json"
     }
@@ -30,7 +30,7 @@ def add_wx_info(roomid,wxId,wxNick,address,times):
     print(response);    
 
 def get_wx_info(roomid,ca):
-    url = f"http://localhost:8080/api/wxInfo/get?roomId={roomid}&address={ca}"
+    url = f"http://47.238.165.188:8080/api/wxInfo/get?roomId={roomid}&address={ca}"
     
     # 发送 GET 请求
     response = requests.get(url)
@@ -73,7 +73,6 @@ while wcf.is_receiving_msg():
                     ca_datas.append(ca_data) 
                     print(ca_datas)   
                     add_wx_info(roomid,caller_wxid,caller_simulate_name,ca,query_time)
-                    
                     
         except Empty:
             continue
