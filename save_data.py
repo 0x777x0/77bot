@@ -51,7 +51,8 @@ def get_wx_info(roomid,ca):
 
 ca_datas = [] 
 while wcf.is_receiving_msg():
-        try:
+        print('启动了吗？？？？')
+        try: 
             msg = wcf.get_msg()
             # 处理消息的逻辑...
             time.sleep(1)
