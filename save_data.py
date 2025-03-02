@@ -7,9 +7,9 @@ import requests
 import json
 
 
-wcf = Wcf()
+""" wcf = Wcf()
 groups = ["58224083481@chatroom"]
-wcf.enable_receiving_msg()
+wcf.enable_receiving_msg() """
 
 print('机器人启动')
 
@@ -49,9 +49,9 @@ def get_wx_info(roomid,ca):
     print(f"数据: {dataList}")
     return dataList
 
-ca_datas = [] 
+""" ca_datas = [] 
 while wcf.is_receiving_msg():
-        print('启动了吗？？？？')
+        # print('启动了吗？？？？')
         try: 
             msg = wcf.get_msg()
             # 处理消息的逻辑...
@@ -78,9 +78,9 @@ while wcf.is_receiving_msg():
         except Empty:
             continue
         except Exception as e:
-            print(e)
+            print(e) """
 
 
 # add_wx_info("111","123","xx","ca",time.time()*1000)
 # get_wx_info("111","ca")
-wcf.keep_running()   
+#wcf.keep_running()   

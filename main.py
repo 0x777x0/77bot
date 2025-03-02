@@ -4,6 +4,7 @@ from queue import Empty
 from ca.ca_info import is_solca, is_eths, math_price, math_cex_price, math_km, math_percent, math_bjtime, get_bundles, is_cexToken, is_pump
 from command.command import command_id
 from httpsss.oke import fetch_oke_latest_info, fetch_oke_overview_info
+from httpsss.onchain import get_price_onchain
 from common.socialMedia_info import is_x, is_web, is_TG
 from common.translate import translate
 from datetime import datetime, timedelta, timezone
@@ -22,6 +23,22 @@ import json
 import redis
 import random
 import string
+import logging
+
+
+# 配置日志
+logging.basicConfig(
+    level=logging.DEBUG,  # 设置日志级别为 DEBUG
+    format="%(asctime)s - %(levelname)s - %(message)s",  # 日志格式
+    handlers=[
+        logging.FileHandler("sol_ca_job.log"),  # 输出到文件
+        logging.StreamHandler()  # 输出到控制台
+    ]
+)
+
+# 获取日志记录器
+logger = logging.getLogger("sol_ca_job_logger")
+
 
 
 
@@ -31,6 +48,7 @@ def store_nested_data_to_redis(roomid, ca_ca, tokenSymbol,caller_name, data1, de
     data = {
     'tokenSymbol':tokenSymbol,
     'caller_name': caller_name,
+    'price':float(data1["data"]["price"]),
     'initCap': float(data1["data"]["marketCap"]) , 
     'topCap': float(data1["data"]["marketCap"]) , 
     'circulatingSupply':float(data1["data"]["circulatingSupply"]) if data1["data"]["circulatingSupply"] else 0,
@@ -70,8 +88,8 @@ def start_wcf_listener():
         try:
             msg = wcf.get_msg()
             # 处理消息的逻辑...
-            time.sleep(1)
-            print('222222')
+            time.sleep(0.2)
+            # print('222222')
             if msg.content == "滚kkkkkkkkkkk":
                 wcf.send_text("好的，小瓜瓜，爱你爱你哦,周末一起玩",msg.sender)
             
@@ -84,9 +102,8 @@ def start_wcf_listener():
                 # wcf.send_text(info,msg.roomid)  
                 timestamp_ms = int(time.time() * 1000)
                 time.sleep(1)
-                old_news_id =  getMyLastestGroupMsgID(keyword=info)  
-                print(old_news_id)
-                old_news.append([old_news_id,timestamp_ms])          
+
+                #old_news.append([old_news_id,timestamp_ms])          
                 print(msg.roomid)       
                 
             """ wcf.send_text("fgfdgh223441","58224083481@chatroom")
@@ -237,7 +254,7 @@ def start_wcf_listener():
             # 判断消息中是否包含ca信息
             sol_id, sol_ca = is_solca(msg.content)
             eths_id, eths_ca = is_eths(msg.content)
-            print('zoudaozheli')
+            # print('zoudaozheli')
             # 判断ca属于哪条链
             if sol_id :
                 chain_id = sol_id
@@ -416,7 +433,7 @@ def start_top_update():
         updata_time = math_bjtime()
 
         print('----{}----开始更新排行榜数据'.format(updata_time))
-        time.sleep(3000)  # 300 秒 = 5 分钟
+        time.sleep(150)  # 300 秒 = 5 分钟
         for roomid in groups:
             # 获取该分组下的所有合约代币
             ca_data = r.hgetall(roomid)
@@ -434,8 +451,68 @@ def start_top_update():
                 # 接口URL
                 sol_id, sol_ca = is_solca(ca_ca)
                 eths_id, eths_ca = is_eths(ca_ca)
+                print('开始检测----{}----的---{}----'.format(roomid,data1['tokenSymbol']))
 
-                if sol_id :               
+
+                """ # 请求参数
+                    payload = [
+                        {"chain": "sol", "address": "4yiKEv3mvgRYeoooeYQtEtF1D1m1JXZvuF3i1s5Zpump"},
+                        {"chain": "bsc", "address": "0xe87739e3494ae2afe555cdd46df45050cc709522"}
+                    ] """
+
+                if sol_id:
+                   payload= [{"chain": "sol", "address": sol_ca}]
+                   print(payload)
+                   result = get_price_onchain(payload)
+                   if result:
+                       price = result['data'][0]['price']
+                   else:
+                       data2 = fetch_oke_latest_info(ca_ca = sol_ca)
+                       price = float(data2["data"]["price"])
+                                     
+                else:
+                   payload= [{"chain": "bsc", "address": eths_ca}]
+                   result = get_price_onchain(payload)
+                   price = result['data'][0]["price"] 
+
+                newCap = float(price) * data1['circulatingSupply'] if price else 1
+                random_number = round(random.uniform(1.10, 1.20), 2)
+                if random_number * newCap > data1['topCap']:
+                    ath_time = math_bjtime()
+                    print('{}创新高,市值突破{}新高时间为{}'.format(data1['tokenSymbol'], random_number * newCap, ath_time))
+                    data1['topCap'] = random_number * newCap
+                    # 计算 topCap / initCap
+                    ratio = data1['topCap'] / data1['initCap']
+                    # 更新 Redis 中的数据
+                    r.hset(roomid, ca_ca, json.dumps(data1))
+
+                    # 更新 rankings 中的数据
+                    # 查找是否已经存在该代币的数据
+                    existing_entry = next((entry for entry in rankings if entry['tokenSymbol'] == data1['tokenSymbol']), None)
+                    if existing_entry:
+                        # 如果存在，更新 ratio
+                        existing_entry['ratio'] = ratio
+                    else:
+                        # 如果不存在，添加新数据
+                        rankings.append({
+                            'tokenSymbol': data1['tokenSymbol'],
+                            'caller_name': data1['caller_name'],
+                            'ratio': ratio
+                        })
+                else:
+                    # 如果未创新高，直接使用已有的 ratio
+                    ratio = data1['topCap'] / data1['initCap']
+                    # 查找是否已经存在该代币的数据
+                    existing_entry = next((entry for entry in rankings if entry['tokenSymbol'] == data1['tokenSymbol']), None)
+                    if not existing_entry:
+                        # 如果不存在，添加新数据
+                        rankings.append({
+                            'tokenSymbol': data1['tokenSymbol'],
+                            'caller_name': data1['caller_name'],
+                            'ratio': ratio
+                        })
+                
+                """ if sol_id :               
                     url = "https://www.okx.com/priapi/v1/dx/market/v2/latest/info?chainId={}&tokenContractAddress={}".format(sol_id,ca_ca)
                     # 发送GET请求
                     response = requests.get(url)
@@ -487,7 +564,7 @@ def start_top_update():
                             })
                 else:
                     print("请求失败，状态码:", response.status_code)
-
+ """
             # 按 ratio 从高到低排序
             rankings.sort(key=lambda x: x['ratio'], reverse=True)
 
@@ -561,12 +638,13 @@ def recover_message():
         time.sleep(10)
         print('开始撤回消息')
         try:
-            print(old_news)
             if len(old_news) > 0:
+                print(old_news)
+                #print('开始撤回消息')
                 # 反向遍历 old_news，避免删除元素影响索引
                 for i in range(len(old_news) - 1, -1, -1):
                     timestamp_ms = int(time.time() * 1000)
-                    if timestamp_ms - old_news[i][1] > 4000 and old_news[i] != 0 :  # 10000ms = 10秒  停留1分40秒
+                    if timestamp_ms - old_news[i][1] > 18000 and old_news[i] != 0 :  # 10000ms = 10秒  停留1分40秒
                         result = wcf.revoke_msg(old_news[i][0])
                         print('撤回消息{}'.format(result))
                         if result == 1:
@@ -613,193 +691,304 @@ def get_pool_create_time(chainId,address):
     print(pool_create_time)
     return pool_create_time
 
+def fetch_and_process_data(roomid, ca, data1, data2, time_ms):
+    
+    try:
+            
+        # 获取合约基础信息
+        chain_name = data1["data"]["chainName"]            
+        tokenSymbol = data1["data"]["tokenSymbol"]
+        tokenName = data1["data"]["tokenName"]
+        price = math_price(float(data1["data"]["price"]))
+        marketCap = math_km(float(data1["data"]["marketCap"]))
+        circulatingSupply = data1["data"]["circulatingSupply"]
+        volume = math_km(float(data1["data"]["volume"]))
+        holders = data1["data"]["holders"]
+        top10HoldAmountPercentage = math_percent(float(data1["data"]["top10HoldAmountPercentage"]))  
+        
+        #获取捆绑信息
+        total_holding_percentage = '功能优化中'
+        # _, total_holding_percentage = get_bundles(address=ca_ca)         
+        
+        # 获取社交信息
+        twitter = data2["data"]["socialMedia"]["twitter"]                  
+        officialWebsite = data2["data"]["socialMedia"]["officialWebsite"]
+        telegram = data2["data"]["socialMedia"]["telegram"]
+        # 对社交信息进行验证
+        twitter_info = is_x(twitter) 
+        officialWebsite_info = is_web(officialWebsite)
+        telegram_info = is_TG(telegram)  
+        
+        # 获取池子创建时间
+        #先从raydium 获取时间
+        pool_create_time = get_pool_create_time(501, ca)
+        
+        if(pool_create_time == 0):
+            #无法从raydium 就获取代币创建时间表示pump
+            pool_create_time = data2["data"]["memeInfo"]["createTime"]
+            find_pool_create_time = '暂未发现'
+        
+        else:
+            dt_object = datetime.fromtimestamp(pool_create_time/1000)
+            find_pool_create_time = dt_object.strftime('%m-%d %H:%M:%S')  # 格式：年-月-日 时:分:秒
+            
+        # 记录哨兵caller信息
+        # 先拿到当前caller的昵称                       
+        # caller_wxid = sol_ca_jobs[i][0].sender  
+        chatroom_members = wcf.get_chatroom_members(roomid = roomid)
+        
+        caller_simulate_name = None
+        caller_list = get_wx_info(roomid,ca)
+        
+        for i in range(len(caller_list)):
+            diff = abs(caller_list[i]['times']- time_ms )
+            diff_seconds = diff/1000.0
+            if diff_seconds <= 6 :
+                caller_simulate_name = caller_list[i]['wxNick']
+                break  
+        caller_simulate_name = caller_simulate_name if caller_simulate_name  else '数据暂时异常'
+        # 返回处理后的数据
+        return {
+            "ca": ca,
+            "roomid": roomid,
+            "chain_name": chain_name,
+            "tokenSymbol": tokenSymbol,
+            "tokenName": tokenName,
+            "price": price,
+            "marketCap": marketCap,
+            "circulatingSupply": circulatingSupply,
+            "volume": volume,
+            "holders": holders,
+            "top10HoldAmountPercentage": top10HoldAmountPercentage,
+            "twitter_info": twitter_info,
+            "officialWebsite_info": officialWebsite_info,
+            "telegram_info": telegram_info,
+            "find_pool_create_time": find_pool_create_time,
+            "caller_simulate_name": caller_simulate_name,
+            'find_time':time_ms
+        }
+    except Exception as e:
+        logger.error(f"获取或处理数据时发生错误: {str(e)}", exc_info=True)
+        return None
+
+def generate_info_message(data, data_save, data1, data2, is_first_time):
+    """
+    生成信息消息。
+    :param data: 处理后的数据
+    :param is_first_time: 是否是首次出现
+    :param timestamp: 时间戳
+    :return: 生成的消息内容
+    """
+    try:
+        find_time = data["find_time"]
+
+        timestamp_seconds = find_time / 1000
+        # 转换为 UTC 时间
+        utc_time = datetime.fromtimestamp(timestamp_seconds, tz=timezone.utc)
+        # 转换为北京时间（UTC+8）
+        beijing_time = utc_time + timedelta(hours=8)
+        # 格式化输出
+        find_time = beijing_time.strftime("%m-%d %H:%M:%S")
+        
+        if is_first_time:
+            cp_time = '发射时间' if is_pump(data["ca"]) else '创建时间'
+            description = translate(data2["data"]['socialMedia']['description']) if data2["data"]['socialMedia']['description'] else '暂无叙事'
+            random_string = ''.join(random.choices(string.ascii_letters + string.digits, k=14))
+            info = (
+                f"{data['ca']}\n"
+                f"简写：{data['tokenSymbol']}\n"
+                f"名称：{data['tokenName']}\n"
+                f"💰价格: {data['price']}\n"
+                f"💹流通市值：{data['marketCap']}\n"
+                f"📊交易量：{data['volume']}\n"
+                f"🦸持有人: {data['holders']}\n"
+                f"🐋top10持仓: {data['top10HoldAmountPercentage']}\n"
+                f"🍭捆绑比例：功能优化中\n\n"
+                f"{data['twitter_info'][0]}{data['twitter_info'][1]}{data['officialWebsite_info'][0]}{data['officialWebsite_info'][1]}{data['telegram_info'][0]}{data['telegram_info'][1]}\n"
+                f"🕵️哨兵：{data['caller_simulate_name']}\n"
+                f"📈Call: {data['marketCap']} -> {data['marketCap']}\n"
+                f"🚀最大倍数: 1.00X\n"
+                f"🔥当前倍数: 1.00X\n\n"
+                f"💬大致叙事: {description if description else '暂无叙事'} {random_string}\n"
+                f"🎯发现时间：{find_time}\n"
+                f"🎯{cp_time}:{data['find_pool_create_time']}"
+            )
+            store_nested_data_to_redis(data['roomid'], data['ca'], data['tokenSymbol'],data['caller_simulate_name'], data1, description, data['find_time'])
+        else:
+            description = translate(data2["data"]['socialMedia']['description']) if data_save["description"] == '暂无叙事' else data_save["description"]
+            nowCap = float(data1["data"]["price"]) * float(data1["data"]["circulatingSupply"])
+            random_string = ''.join(random.choices(string.ascii_letters + string.digits, k=14))
+            info = (
+                f"{data['ca']}\n"
+                f"简写：{data['tokenSymbol']}\n"
+                f"名称：{data['tokenName']}\n"
+                f"💰价格: {data['price']}\n"
+                f"💹流通市值：{data['marketCap']}\n"
+                f"📊交易量：{data['volume']}\n"
+                f"🦸持有人: {data['holders']}\n"
+                f"🐋top10持仓: {data['top10HoldAmountPercentage']}\n"
+                f"🍭捆绑比例：功能优化中\n\n"
+                f"{data['twitter_info'][0]}{data['twitter_info'][1]}{data['officialWebsite_info'][0]}{data['officialWebsite_info'][1]}{data['telegram_info'][0]}{data['telegram_info'][1]}\n"
+                f"🕵️哨兵：{data['caller_simulate_name']}\n"
+                f"📈Call: {math_km(data_save['initCap'])} -> {math_km(data_save['topCap'])}\n"
+                f"🚀最大倍数: {str(round(data_save['topCap'] / data_save['initCap'], 2)) + 'X'}\n"
+                f"🔥当前倍数: {str(round(nowCap / float(data_save['initCap']), 2)) + 'X'}\n\n"
+                f"💬大致叙事: {description} {random_string} \n"
+                f"🎯发现时间：{find_time}\n"
+                f"🎯创建时间：{data['find_pool_create_time']}"
+            )
+        return info,random_string
+
+
+    except Exception as e:
+        logger.error(f'生成消息时发生错误：{str(e)}',exc_info = True)
+        return None
+
+
 def sol_ca_job():
+    
     while not stop_event.is_set():
-        print('开始sol任务') 
-        if len(sol_ca_jobs) > 0:
+        try:
+            if len(sol_ca_jobs) > 0:
+                print('开始sol任务') 
                 # 反向遍历 sol_ca_jobs，避免删除元素影响索引
                 for i in range(len(sol_ca_jobs) - 1, -1, -1):
-                    time.sleep(1)
+                    time.sleep(0.5)
                     roomid = sol_ca_jobs[i][0].roomid
                     ca = sol_ca_jobs[i][1]
-
+                    time_ms = sol_ca_jobs[i][2]
+                    # 获取并处理信息
                     data1 = fetch_oke_latest_info(ca_ca = ca)
                     data2 = fetch_oke_overview_info(ca_ca = ca)
-                    print('来到了这里1111')
-                    print(data1)
-                    print(data2)
-                    # 检查请求是否成功
                     if data1 and data2 :
-                        print('来到了这里2222')
-                        # 获取合约基础信息
-                        chain_name = data1["data"]["chainName"]            
-                        tokenSymbol = data1["data"]["tokenSymbol"]
-                        tokenName = data1["data"]["tokenName"]
-                        price = math_price(float(data1["data"]["price"]))
-                        marketCap = math_km(float(data1["data"]["marketCap"]))
-                        circulatingSupply = data1["data"]["circulatingSupply"]
-                        volume = math_km(float(data1["data"]["volume"]))
-                        holders = data1["data"]["holders"]
-                        top10HoldAmountPercentage = math_percent(float(data1["data"]["top10HoldAmountPercentage"]))  
-                        
-                        #获取捆绑信息
-                        total_holding_percentage = '功能优化中'
-                        # _, total_holding_percentage = get_bundles(address=ca_ca)         
-                        
-                        # 获取社交信息
-                        twitter = data2["data"]["socialMedia"]["twitter"]                  
-                        officialWebsite = data2["data"]["socialMedia"]["officialWebsite"]
-                        telegram = data2["data"]["socialMedia"]["telegram"]
-                        # 对社交信息进行验证
-                        twitter_info = is_x(twitter) 
-                        officialWebsite_info = is_web(officialWebsite)
-                        telegram_info = is_TG(telegram)  
-                        
-                        # 获取池子创建时间
-                        #先从raydium 获取时间
-                        pool_create_time = get_pool_create_time(501, ca)
-                        
-                        if(pool_create_time == 0):
-                            #无法从raydium 就获取代币创建时间表示pump
-                            pool_create_time = data2["data"]["memeInfo"]["createTime"]
-                            find_pool_create_time = '暂未发现'
-                        
-                        else:
-                            dt_object = datetime.fromtimestamp(pool_create_time/1000)
-                            find_pool_create_time = dt_object.strftime('%m-%d %H:%M:%S')  # 格式：年-月-日 时:分:秒
-                         
-                        print('拿到数据了1')
-                        # 记录哨兵caller信息
-                        # 先拿到当前caller的昵称                       
-                        print(roomid)
-                        # caller_wxid = sol_ca_jobs[i][0].sender
-                        
-                        chatroom_members = wcf.get_chatroom_members(roomid = roomid)
-                        print('拿到数据了2')
-                        print(chatroom_members)
-                        """ caller_list = get_wx_info(roomid,ca)
-                        for i in range(len(caller_list)):
-                            diff = abs(caller_list[i]['times']- sol_ca_jobs[i][2] )
-                            diff_seconds = diff/1000.0
-                            if diff_seconds <=4 :
-                               caller_simulate_name = caller_list[i]['wxNick']
-                               break """
- 
-                        caller_simulate_name = caller_simulate_name if caller_simulate_name  else '数据暂时异常'
-                        print('拿到数据了3')
-                        # 将caller喊单信息组装成模拟数据
-                        ca_group_simulate_datas = [roomid,sol_ca_jobs[i][1]]
-                        redis_key = 'ca_group_simulate_datas'
-                        ca_group_datas = get_data_from_redis(redis_key)
-                        data_save = get_nested_data_from_redis(roomid = roomid,ca_ca = sol_ca_jobs[i][1])
-                        
-                        
+                        data =  fetch_and_process_data(roomid=roomid, ca=ca, data1=data1, data2=data2, time_ms=time_ms)
+                        if not data:
+                            continue
+
+                        # 判断该 ca 在当前群组是不是首次出现
+                        data_save = get_nested_data_from_redis(roomid=roomid, ca_ca=ca)
+                                    
                         # 判断该ca在当前群组是不是首次出现
                         if data_save :
                             # 如果是再次出现，则需要找到哨兵数据
-                            print('该合约重复出现')
-                            query_time = int(time.time()*1000)
-                            ca_datas = get_nested_data_from_redis(roomid, sol_ca_jobs[i][1])
-                            
-                            caller_name = data_save["caller_name"]
-                            find_time = data_save["find_time"]
-
-                            timestamp_seconds = find_time / 1000
-                            # 转换为 UTC 时间
-                            utc_time = datetime.fromtimestamp(timestamp_seconds, tz=timezone.utc)
-                            # 转换为北京时间（UTC+8）
-                            beijing_time = utc_time + timedelta(hours=8)
-                            # 格式化输出
-                            find_time = beijing_time.strftime("%m-%d %H:%M:%S")
-
-                            description = translate(data2["data"]['socialMedia']['description']) if data_save["description"] == '暂无叙事' else data_save["description"]                           
-                            nowCap = float(data1["data"]["price"])*float(data1["data"]["circulatingSupply"])
-                        
-                            print(data_save)
-                            random_string = ''.join(random.choices(string.ascii_letters + string.digits, k=14))
-
-                            info = (
-                            f"{sol_ca_jobs[i][1]}\n"
-                            f"简写：{tokenSymbol}\n"
-                            f"名称：{tokenName}\n"
-                            f"💰价格: {price}\n"
-                            f"💹流通市值：{marketCap}\n"
-                            f"📊交易量：{volume}\n"
-                            f"🦸持有人: {holders}\n"
-                            f"🐋top10持仓: {top10HoldAmountPercentage}\n"
-                            f"🍭捆绑比例：{total_holding_percentage}\n\n"
-                            f"{twitter_info[0]}{twitter_info[1]}{officialWebsite_info[0]}{officialWebsite_info[1]}{telegram_info[0]}{telegram_info[1]}\n"
-                            f"🕵️哨兵：{caller_name}\n"
-                            f"📈Call: {math_km(data_save['initCap'])} -> {math_km(data_save['topCap'])}\n"
-                            f"🚀最大倍数: {str(round(data_save['topCap'] / data_save['initCap'], 2)) + 'X'}\n"
-                            f"🔥当前倍数: {str(round(nowCap / float(data_save['initCap']), 2)) + 'X'}\n\n"
-                            f"💬大致叙事: {description} {random_string} \n"
-                            f"🎯发现时间：{find_time}\n"
-                            f"🎯创建时间：{find_pool_create_time}"
-                            #f"{message_number}"
-                            ) 
-                                                       
-                            wcf.send_text(info,sol_ca_jobs[i][0].roomid)
-                            timestamp_ms = int(time.time() * 1000)
-                            time.sleep(1)
-                            old_news_id =  getMyLastestGroupMsgID(keyword=random_string)  
-                            print(old_news_id)
-                            old_news.append([old_news_id,timestamp_ms])
-                            print(info)
-                            
-                            
-                        # 首次出现    
+                            logger.info('该合约重复出现')
+                            info, random_string = generate_info_message(data,data_save=data_save,data1=data1, data2=data2, is_first_time=False)
                         else:
-                            cp_time = '发射时间' if is_pump(sol_ca_jobs[i][1]) else '创建时间'
-                            description = translate(data2["data"]['socialMedia']['description']) if data2["data"]['socialMedia']['description'] else '暂无叙事'
-                            caller_name = caller_simulate_name
-                            random_string = ''.join(random.choices(string.ascii_letters + string.digits, k=14))
-                            info = (
-                            f"{sol_ca_jobs[i][1]}\n"
-                            f"简写：{tokenSymbol}\n"
-                            f"名称：{tokenName}\n"
-                            f"💰价格: {price}\n"
-                            f"💹流通市值：{marketCap}\n"
-                            f"📊交易量：{volume}\n"
-                            f"🦸持有人: {holders}\n"
-                            f"🐋top10持仓: {top10HoldAmountPercentage}\n"
-                            f"🍭捆绑比例：{total_holding_percentage}\n\n"
-                            f"{twitter_info[0]}{twitter_info[1]}{officialWebsite_info[0]}{officialWebsite_info[1]}{telegram_info[0]}{telegram_info[1]}\n"
-                            f"🕵️哨兵：{caller_name}\n"
-                            f"📈Call: {marketCap} -> {marketCap}\n"
-                            f"🚀最大倍数: 1.00X\n"
-                            f"🔥当前倍数: 1.00X\n\n"
-                            f"💬大致叙事: {description if description else '暂无叙事'} {random_string}\n"
-                            f"🎯发现时间：{sol_ca_jobs[i][2]}\n"
-                            f"🎯{cp_time}:{find_pool_create_time}"
-                            )                   
-                            wcf.send_text(info,sol_ca_jobs[i][0].roomid)
+                            # 首次出现
+                            info, random_string = generate_info_message(data,data_save=data_save,data1=data1, data2=data2, is_first_time=True)
+
+                        if info:
+                            wcf.send_text(info, roomid)
                             timestamp_ms = int(time.time() * 1000)
                             time.sleep(1)
-                            old_news_id =  getMyLastestGroupMsgID(keyword=random_string)  
-                            print(old_news_id)
-                            old_news.append([old_news_id,timestamp_ms])
-                        
-                            # 记录每个群组，每个合约，从被发现后，上涨的最大倍数
-                            # 一条喊单记录   群组 ca 简写 喊单人 链 初始市值 最高市值 叙事 喊单时间， 最新查询时间，  单次查询到的数据为 供应量 和 价格序列                           
-                            store_nested_data_to_redis(roomid, sol_ca_jobs[i][1], tokenSymbol,caller_name, data1, description, timestamp_ms)
-                            data_save = get_nested_data_from_redis(roomid = roomid,ca_ca = sol_ca_jobs[i][1])
-                            print(data_save)
-                            #redis_key = "ca_group_simulate_datas_list"
-                            #r.rpush(redis_key, *ca_group_simulate_datas)
+                            old_news_id = getMyLastestGroupMsgID(keyword=random_string)
+                            old_news.append([old_news_id, timestamp_ms])
+                            del sol_ca_jobs[i]
 
-                            #ca_datas[roomid][ca_ca] = {
-                                #'caller_name':caller_name,
-                                #'initCap':float(data1["data"]["marketCap"]),
-                                #'topCap':float(data1["data"]["marketCap"]),
-                                #'description':description,
-                                #'find_time':find_time_ms,
-                                #'query_time':find_time_ms}                                                       
-                            print(info)
-                                    
-                        del sol_ca_jobs[i]
+        except Exception as e:
+            logger.error(f"主循环发生错误: {str(e)}", exc_info=True)
+            continue
+                  
+        """               query_time = int(time.time()*1000)
+                        ca_datas = get_nested_data_from_redis(roomid, sol_ca_jobs[i][1])
+                        
+                        caller_name = data_save["caller_name"]
+                        find_time = data_save["find_time"]
+
+                        timestamp_seconds = find_time / 1000
+                        # 转换为 UTC 时间
+                        utc_time = datetime.fromtimestamp(timestamp_seconds, tz=timezone.utc)
+                        # 转换为北京时间（UTC+8）
+                        beijing_time = utc_time + timedelta(hours=8)
+                        # 格式化输出
+                        find_time = beijing_time.strftime("%m-%d %H:%M:%S")
+
+                        description = translate(data2["data"]['socialMedia']['description']) if data_save["description"] == '暂无叙事' else data_save["description"]                           
+                        nowCap = float(data1["data"]["price"])*float(data1["data"]["circulatingSupply"])
                     
-        pass
+                        print(data_save)
+                        random_string = ''.join(random.choices(string.ascii_letters + string.digits, k=14))
+
+                        info = (
+                        f"{sol_ca_jobs[i][1]}\n"
+                        f"简写：{tokenSymbol}\n"
+                        f"名称：{tokenName}\n"
+                        f"💰价格: {price}\n"
+                        f"💹流通市值：{marketCap}\n"
+                        f"📊交易量：{volume}\n"
+                        f"🦸持有人: {holders}\n"
+                        f"🐋top10持仓: {top10HoldAmountPercentage}\n"
+                        f"🍭捆绑比例：{total_holding_percentage}\n\n"
+                        f"{twitter_info[0]}{twitter_info[1]}{officialWebsite_info[0]}{officialWebsite_info[1]}{telegram_info[0]}{telegram_info[1]}\n"
+                        f"🕵️哨兵：{caller_name}\n"
+                        f"📈Call: {math_km(data_save['initCap'])} -> {math_km(data_save['topCap'])}\n"
+                        f"🚀最大倍数: {str(round(data_save['topCap'] / data_save['initCap'], 2)) + 'X'}\n"
+                        f"🔥当前倍数: {str(round(nowCap / float(data_save['initCap']), 2)) + 'X'}\n\n"
+                        f"💬大致叙事: {description} {random_string} \n"
+                        f"🎯发现时间：{find_time}\n"
+                        f"🎯创建时间：{find_pool_create_time}"
+                        #f"{message_number}"
+                        ) 
+                                                    
+                        wcf.send_text(info,sol_ca_jobs[i][0].roomid)
+                        timestamp_ms = int(time.time() * 1000)
+                        time.sleep(1)
+                        old_news_id =  getMyLastestGroupMsgID(keyword=random_string)  
+                        print(old_news_id)
+                        old_news.append([old_news_id,timestamp_ms])
+                        print(info)
+                        
+                        
+                    # 首次出现    
+                    else:
+                        cp_time = '发射时间' if is_pump(sol_ca_jobs[i][1]) else '创建时间'
+                        description = translate(data2["data"]['socialMedia']['description']) if data2["data"]['socialMedia']['description'] else '暂无叙事'
+                        caller_name = caller_simulate_name
+                        random_string = ''.join(random.choices(string.ascii_letters + string.digits, k=14))
+                        info = (
+                        f"{sol_ca_jobs[i][1]}\n"
+                        f"简写：{tokenSymbol}\n"
+                        f"名称：{tokenName}\n"
+                        f"💰价格: {price}\n"
+                        f"💹流通市值：{marketCap}\n"
+                        f"📊交易量：{volume}\n"
+                        f"🦸持有人: {holders}\n"
+                        f"🐋top10持仓: {top10HoldAmountPercentage}\n"
+                        f"🍭捆绑比例：{total_holding_percentage}\n\n"
+                        f"{twitter_info[0]}{twitter_info[1]}{officialWebsite_info[0]}{officialWebsite_info[1]}{telegram_info[0]}{telegram_info[1]}\n"
+                        f"🕵️哨兵：{caller_name}\n"
+                        f"📈Call: {marketCap} -> {marketCap}\n"
+                        f"🚀最大倍数: 1.00X\n"
+                        f"🔥当前倍数: 1.00X\n\n"
+                        f"💬大致叙事: {description if description else '暂无叙事'} {random_string}\n"
+                        f"🎯发现时间：{sol_ca_jobs[i][2]}\n"
+                        f"🎯{cp_time}:{find_pool_create_time}"
+                        )                   
+                        wcf.send_text(info,sol_ca_jobs[i][0].roomid)
+                        timestamp_ms = int(time.time() * 1000)
+                        time.sleep(1)
+                        old_news_id =  getMyLastestGroupMsgID(keyword=random_string)  
+                        print(old_news_id)
+                        old_news.append([old_news_id,timestamp_ms])
+                    
+                        # 记录每个群组，每个合约，从被发现后，上涨的最大倍数
+                        # 一条喊单记录   群组 ca 简写 喊单人 链 初始市值 最高市值 叙事 喊单时间， 最新查询时间，  单次查询到的数据为 供应量 和 价格序列                           
+                        store_nested_data_to_redis(roomid, sol_ca_jobs[i][1], tokenSymbol,caller_name, data1, description, timestamp_ms)
+                        data_save = get_nested_data_from_redis(roomid = roomid,ca_ca = sol_ca_jobs[i][1])
+                        #redis_key = "ca_group_simulate_datas_list"
+                        #r.rpush(redis_key, *ca_group_simulate_datas)
+
+                        #ca_datas[roomid][ca_ca] = {
+                            #'caller_name':caller_name,
+                            #'initCap':float(data1["data"]["marketCap"]),
+                            #'topCap':float(data1["data"]["marketCap"]),
+                            #'description':description,
+                            #'find_time':find_time_ms,
+                            #'query_time':find_time_ms}                                                       
+                        print(info)
+                                
+                    del sol_ca_jobs[i] """
+                
 
 
 
@@ -812,16 +1001,16 @@ def start_all_tasks():
     wcf_listener_thread.start()
 
     # 启动sol合约查询任务的线程
-    #sol_job_thread = threading.Thread(target=sol_ca_job)
-    #sol_job_thread.start()
+    sol_job_thread = threading.Thread(target=sol_ca_job)
+    sol_job_thread.start()
 
     # 启动排行榜更新线程
-    #top_update_thread = threading.Thread(target=start_top_update)
-    #top_update_thread.start()
+    top_update_thread = threading.Thread(target=start_top_update)
+    top_update_thread.start()
 
     # 启动撤回消息的线程
-    #recover_message_thread = threading.Thread(target=recover_message)
-    #recover_message_thread.start()
+    recover_message_thread = threading.Thread(target=recover_message)
+    recover_message_thread.start()
 
     
 
@@ -833,9 +1022,9 @@ def start_all_tasks():
     except KeyboardInterrupt:
         stop_event.set()
         wcf_listener_thread.join()
-        #top_update_thread.join()
-        #sol_job_thread.join()
-        #recover_message_thread.join()
+        top_update_thread.join()
+        sol_job_thread.join()
+        recover_message_thread.join()
         print("已停止所有任务")
 
 
@@ -853,7 +1042,7 @@ old_news = []
 r = redis.StrictRedis(host='localhost', port=6379, db=0, decode_responses=True)
 
 # '53951514521@chatroom'
-groups = ["58224083481@chatroom"]
+groups = ["58224083481@chatroom",'52173635194@chatroom']
 
 
 start_all_tasks()

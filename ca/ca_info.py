@@ -107,7 +107,7 @@ def is_cexToken(text):
     
 def is_pump(address):
     # true 就是在内盘 false 外盘
-    url = f"https://api.quickcar.io/sol/api/getPump?address={address}"
+    url = f"http://47.243.181.245:3000/sol/api/getPump?address={address}"
     
     # 发送 GET 请求
     response = requests.get(url)
