@@ -16,7 +16,7 @@ logging.basicConfig(
 # 获取日志记录器
 logger = logging.getLogger("api_request_logger")
 
-def fetch_oke_latest_info(ca_ca, max_retries=3, retry_delay=0.5):
+def fetch_oke_latest_info(chainId,ca_ca, max_retries=3, retry_delay=0.5):
     """
     访问指定 URL 并获取市场信息。如果请求失败，会尝试重试。
 
@@ -25,9 +25,13 @@ def fetch_oke_latest_info(ca_ca, max_retries=3, retry_delay=0.5):
     :param retry_delay: 重试间隔时间（默认 500 毫秒）
     :return: 返回 API 响应数据JSON 格式），如果请求失败则返回 None。
     """
+    
+    
+    
+    
     url = "https://www.okx.com/priapi/v1/dx/market/v2/latest/info"
     params = {
-        "chainId": 501,
+        "chainId": chainId,
         "tokenContractAddress": ca_ca
     }
 
@@ -69,7 +73,7 @@ def fetch_oke_latest_info(ca_ca, max_retries=3, retry_delay=0.5):
 
 
 
-def fetch_oke_overview_info(ca_ca, max_retries=3, retry_delay=0.5):
+def fetch_oke_overview_info(chainId, ca_ca, max_retries=3, retry_delay=0.5):
     """
     访问指定 URL 并获取市场信息。如果请求失败，会尝试重试。
 
@@ -80,7 +84,7 @@ def fetch_oke_overview_info(ca_ca, max_retries=3, retry_delay=0.5):
     """
     url = "https://www.okx.com/priapi/v1/dx/market/v2/token/overview/"
     params = {
-        "chainId": 501,
+        "chainId": chainId,
         "tokenContractAddress": ca_ca
     }
 
