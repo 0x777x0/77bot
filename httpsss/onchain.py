@@ -78,9 +78,11 @@ def get_price_onchain(payload, max_retries=3, retry_delay=0.5):
 
 # 示例调用
 if __name__ == "__main__":
-    payload = [
-        {"chain": "sol", "address": "9oANHb8BKiyhmyvLH1gsj73RUB9PkTLQHs5NmJK8pump"}
-    ]
+    payload = [{'chain': 'sol', 'address': '4GxCee457d4zfw8NPnBbqFuVpRjZtsiQg9P2C4Bcpump'},
+                {'chain': 'sol', 'address': '47u37R4w5VSh7YXSCpiB9mogQjFA9JW7A25sHWxfpump'}, 
+                {'chain': 'sol', 'address': 'DjgujfEv2u2qz7PNuS6Ct7bctnxPFihfWE2zBpKZpump'},
+                  {'chain': 'bsc', 'address': '0xd2a55e015C8Aa074De8b3bffefdb926B262884F1'},
+                    {'chain': 'sol', 'address': '9L1SWjsBFaCeUP9sh9s7wty7n69vTrTPCJx41DcPpump'}]
     result = get_price_onchain(payload)
     if result:
         print("请求成功，返回数据:", result)

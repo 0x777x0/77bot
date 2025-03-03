@@ -307,11 +307,13 @@ def generate_info_message(data, data_save, data1, data2, is_first_time, time_ms)
             description = translate(data2["data"]['socialMedia']['description']) if data_save["description"] == '暂无叙事' else data_save["description"]
             nowCap = float(data1["data"]["price"]) * float(data1["data"]["circulatingSupply"])
             if data_save['caller_name'] == '数据暂时异常':
+                caller_simulate_name = None
+                caller_gender = None
                 caller_list = get_wx_info(data['roomid'],data['ca'])
                 for i in range(len(caller_list)):
                     diff = abs(caller_list[i]['times']- time_ms )
                     diff_seconds = diff/1000.0
-                    if diff_seconds <= 6 :
+                    if diff_seconds <= 8 :
                         caller_simulate_name = caller_list[i]['wxNick']
                         data3 = wcf.get_info_by_wxid(caller_list[i]['wxId'])
                         print('~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~')
@@ -332,7 +334,7 @@ def generate_info_message(data, data_save, data1, data2, is_first_time, time_ms)
                 f"🐋top10持仓: {data['top10HoldAmountPercentage']}\n"
                 f"🍭捆绑比例：功能优化中\n\n"
                 f"{data['twitter_info'][0]}{data['twitter_info'][1]}{data['officialWebsite_info'][0]}{data['officialWebsite_info'][1]}{data['telegram_info'][0]}{data['telegram_info'][1]}\n"
-                f"🕵️哨兵：{data_save['caller_name']}\n"
+                f"🕵️哨兵：{caller_simulate_name}\n"
                 f"📈Call: {math_km(data_save['initCap'])} -> {math_km(data_save['topCap'])}\n"
                 f"🚀最大倍数: {str(round(data_save['topCap'] / data_save['initCap'], 2)) + 'X'}\n"
                 f"🔥当前倍数: {str(round(nowCap / float(data_save['initCap']), 2)) + 'X'}\n\n"
@@ -392,6 +394,35 @@ def sol_ca_job():
         except Exception as e:
             logger.error(f"主循环发生错误: {str(e)}", exc_info=True)
             continue
+
+
+def sort_response_by_input(input_data, response_data):
+    """
+    根据 input_data 的顺序，重新排列 response_data['data']
+    
+    :param input_data: list，包含请求的合约地址列表
+    :param response_data: dict，包含 API 返回的数据
+    :return: dict，返回和原始 response_data 格式相同，但顺序匹配 input_data
+    """
+    if 'data' not in response_data:
+        return {'msg': '错误: API 返回数据格式不正确', 'code': 400, 'data': []}
+
+    # 创建一个地址 -> 价格的映射表
+    price_dict = {item['address']: item['price'] for item in response_data['data']}
+
+    # 按照 input_data 的顺序重新排序返回数据
+    sorted_data = [{'address': item['address'], 'price': price_dict.get(item['address'], None)} for item in input_data]
+
+    # 生成最终的返回数据，格式和原始 response_data 一致
+    sorted_response = {
+        'msg': response_data.get('msg', '操作成功'),
+        'code': response_data.get('code', 200),
+        'data': sorted_data
+    }
+
+    return sorted_response
+
+
 
 
 
@@ -485,15 +516,16 @@ def start_top_update():
                                 payload.append({"chain": "bsc", "address": eths_ca})
 
                         # 批量查询价格
-                        result = get_price_onchain(payload)
-                        if not result or 'data' not in result:
-                            logger.warning(f"批量查询价格失败: {result}")
+                        result1 = get_price_onchain(payload)
+                        result2 = sort_response_by_input(payload,result1)
+                        if not result2 or 'data' not in result2:
+                            logger.warning(f"批量查询价格失败: {result2}")
                             continue
 
                         # 处理每个合约的最新价格
                         for idx, (ca_ca, data_json) in enumerate(batch):
                             data1 = json.loads(data_json)
-                            price_data = result['data'][idx] if idx < len(result['data']) else None
+                            price_data = result2['data'][idx] if idx < len(result2['data']) else None
 
                             if not price_data:
                                 logger.warning(f"未获取到合约 {data1['tokenSymbol']} 的价格数据")
@@ -503,6 +535,9 @@ def start_top_update():
                             price = float(price_data['price'])
                             newCap = price * data1['circulatingSupply'] if price else (data1['topCap']/1.15)
                             print('------------------------')
+                            print(data1['tokenSymbol'])
+                            print(price)
+                            print(data1['circulatingSupply'])
                             print(data1['initCap'])
                             print(newCap)
                             print(data1['topCap'])
