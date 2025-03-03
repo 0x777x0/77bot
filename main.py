@@ -534,13 +534,13 @@ def start_top_update():
                             # 获取最新价格
                             price = float(price_data['price'])
                             newCap = price * data1['circulatingSupply'] if price else (data1['topCap']/1.15)
-                            print('------------------------')
+                            """ print('------------------------')
                             print(data1['tokenSymbol'])
                             print(price)
                             print(data1['circulatingSupply'])
                             print(data1['initCap'])
                             print(newCap)
-                            print(data1['topCap'])
+                            print(data1['topCap']) """
                             # 检查是否创新高
                             random_number = round(random.uniform(1.10, 1.20), 2)
                             if random_number * newCap > data1['topCap']:
