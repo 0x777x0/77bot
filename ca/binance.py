@@ -24,9 +24,10 @@ def get_binance_price(symbol):
     
     # 获取价格之前，先记录时间
     exchange_info_end_time = time.time()
+    # https://api.binance.com/api/v3/ticker/24hr?symbol=BTCUSDT
+    # url = f"https://api.binance.com/api/v3/ticker/price?symbol={upper_symbol}USDT"
+    url = f"https://api.binance.com/api/v3/ticker/24hr?symbol={upper_symbol}USDT"
 
-    url = f"https://api.binance.com/api/v3/ticker/price?symbol={upper_symbol}USDT"
-    
     # 发送 GET 请求
     response = requests.get(url, proxies=proxies)
     print(f"请求 {url} 耗时: {time.time() - exchange_info_end_time:.2f} 秒")
@@ -41,12 +42,13 @@ def get_binance_price(symbol):
         return 0
     
     data = json.loads(value)  # 将响应内容转换为字典
-    price = data.get("price")
+    priceChangePercent = data.get("priceChangePercent");
+    price = data.get("lastPrice")
     print(f"获取到价格: {price}")
 
     end_time = time.time()  # 记录结束时间
     print(f"获取获取BINANCE {upper_symbol} 的价格总耗时: {end_time - start_time:.2f} 秒")
-    return price
+    return {price,priceChangePercent}
 
 
 def is_binance_symbol(symbol):

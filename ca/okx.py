@@ -39,20 +39,27 @@ def get_okx_price(symbol):
     # 如果返回为空，直接返回
     if not value:
         print("返回数据为空，返回 0")
-        return 0
+        return {0,0}
     
     data = json.loads(value)  # 将响应内容转换为字典
     code = data.get("code")
     if code is not None and isinstance(code, int) and code != 0:
-        return 0
+        return {0,0}
     
     prices = data.get("data",[])
     price = prices[0]["idxPx"]
+    open24h = prices[0]["open24h"]
     print(f"获取到价格: {price}")
-
+    try:
+        price = float(price)
+        open24h = float(open24h)
+        priceChangePercent = (price - open24h) / open24h * 100
+    except ValueError:
+        print("转换失败，确保 price 和 open24h 是数值格式")
+        priceChangePercent = None  # 或者赋予默认值
     end_time = time.time()  # 记录结束时间
     print(f"获取OKX {upper_symbol} 的价格总耗时: {end_time - start_time:.2f} 秒")
-    return price
+    return {price,priceChangePercent}
 
 
 def is_okx_symbol(symbol):
