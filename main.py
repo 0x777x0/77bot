@@ -168,7 +168,7 @@ def fetch_and_process_data(roomid, chainId, ca, data1, data2, time_ms):
     try:
             
         # 获取合约基础信息
-        chain_name = data1["data"]["chainName"]            
+        chain_name = data1["data"]["chainName"] if data1["data"]["chainName"] else '暂无数据'            
         tokenSymbol = data1["data"]["tokenSymbol"]
         tokenName = data1["data"]["tokenName"]
         price = math_price(float(data1["data"]["price"]))
@@ -306,6 +306,20 @@ def generate_info_message(data, data_save, data1, data2, is_first_time, time_ms)
         else:
             description = translate(data2["data"]['socialMedia']['description']) if data_save["description"] == '暂无叙事' else data_save["description"]
             nowCap = float(data1["data"]["price"]) * float(data1["data"]["circulatingSupply"])
+            if data_save['caller_name'] == '数据暂时异常':
+                caller_list = get_wx_info(data['roomid'],data['ca'])
+                for i in range(len(caller_list)):
+                    diff = abs(caller_list[i]['times']- time_ms )
+                    diff_seconds = diff/1000.0
+                    if diff_seconds <= 6 :
+                        caller_simulate_name = caller_list[i]['wxNick']
+                        data3 = wcf.get_info_by_wxid(caller_list[i]['wxId'])
+                        print('~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~')
+                        print(data3)
+                        caller_gender = data3['gender'] if data3['gender'] else '未知'
+                        break  
+                caller_simulate_name = caller_simulate_name if caller_simulate_name  else '数据暂时异常'
+                store_nested_data_to_redis(data['roomid'], data['ca'], data['tokenSymbol'],caller_simulate_name, caller_gender,data1, description, data['find_time'])
             random_string = ''.join(random.choices(string.ascii_letters + string.digits, k=14))
             info = (
                 f"{data['ca']}\n"
@@ -429,7 +443,7 @@ def eths_ca_job():
 
 # 每5分钟更新top数据和最高倍数数据
 def start_top_update():
-    """
+    """pricetopCap
     定时更新排行榜数据。
     """
     # 初始化全局 rankings 字典，用于存储每个群组的排行榜数据
@@ -487,32 +501,48 @@ def start_top_update():
 
                             # 获取最新价格
                             price = float(price_data['price'])
-                            new_cap = price * data1['circulatingSupply'] if price else (data1['topCap']/1.15)
-
+                            newCap = price * data1['circulatingSupply'] if price else (data1['topCap']/1.15)
+                            print('------------------------')
+                            print(data1['initCap'])
+                            print(newCap)
+                            print(data1['topCap'])
                             # 检查是否创新高
                             random_number = round(random.uniform(1.10, 1.20), 2)
-                            if random_number * new_cap > data1['topCap']:
+                            if random_number * newCap > data1['topCap']:
                                 ath_time = math_bjtime()
-                                logger.info(f"{data1['tokenSymbol']} 创新高, 市值突破 {random_number * new_cap}, 新高时间为 {ath_time}")
-                                data1['topCap'] = random_number * new_cap
-
+                                print('{}创新高,市值突破{}新高时间为{}'.format(data1['tokenSymbol'], random_number * newCap, ath_time))
+                                data1['topCap'] = random_number * newCap
+                                # 计算 topCap / initCap
+                                ratio = data1['topCap'] / data1['initCap']
                                 # 更新 Redis 中的数据
                                 r.hset(roomid, ca_ca, json.dumps(data1))
 
-                            # 计算涨幅比例
-                            ratio = data1['topCap'] / data1['initCap']
-
-                            # 更新排行榜数据
-                            existing_entry = next((entry for entry in rankings if entry['tokenSymbol'] == data1['tokenSymbol']), None)
-                            if existing_entry:
-                                existing_entry['ratio'] = ratio
+                                # 更新 rankings 中的数据
+                                # 查找是否已经存在该代币的数据
+                                existing_entry = next((entry for entry in rankings if entry['tokenSymbol'] == data1['tokenSymbol']), None)
+                                if existing_entry:
+                                    # 如果存在，更新 ratio
+                                    existing_entry['ratio'] = ratio
+                                else:
+                                    # 如果不存在，添加新数据
+                                    rankings.append({
+                                        'tokenSymbol': data1['tokenSymbol'],
+                                        'caller_name': data1['caller_name'],
+                                        'ratio': ratio
+                                    })
                             else:
-                                rankings.append({
-                                    'tokenSymbol': data1['tokenSymbol'],
-                                    'caller_name': data1['caller_name'],
-                                    'caller_gender': data1['caller_gender'],
-                                    'ratio': ratio
-                                })
+                            # 如果未创新高，直接使用已有的 ratio
+                                ratio = data1['topCap'] / data1['initCap']
+                                # 查找是否已经存在该代币的数据
+                                existing_entry = next((entry for entry in rankings if entry['tokenSymbol'] == data1['tokenSymbol']), None)
+                                if not existing_entry:
+                                    # 如果不存在，添加新数据
+                                    rankings.append({
+                                        'tokenSymbol': data1['tokenSymbol'],
+                                        'caller_name': data1['caller_name'],
+                                        'caller_gender': data1['caller_gender'],
+                                        'ratio': ratio
+                                    })   
 
                     # 按 ratio 从高到低排序
                     rankings.sort(key=lambda x: x['ratio'], reverse=True)
