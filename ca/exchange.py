@@ -5,7 +5,7 @@ def get_exchange_price(symbol):
     price,priceChangePercent = get_binance_price(symbol)
     if price is not None and isinstance(price, int) and price == 0:
         price,priceChangePercent = get_okx_price(symbol)
-    return {price,priceChangePercent}  
+    return price,priceChangePercent 
 
 
 

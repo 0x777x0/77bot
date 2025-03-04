@@ -59,7 +59,7 @@ def get_okx_price(symbol):
         priceChangePercent = None  # 或者赋予默认值
     end_time = time.time()  # 记录结束时间
     print(f"获取OKX {upper_symbol} 的价格总耗时: {end_time - start_time:.2f} 秒")
-    return {price,priceChangePercent}
+    return price,priceChangePercent
 
 
 def is_okx_symbol(symbol):

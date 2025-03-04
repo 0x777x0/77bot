@@ -48,7 +48,7 @@ def get_binance_price(symbol):
 
     end_time = time.time()  # 记录结束时间
     print(f"获取获取BINANCE {upper_symbol} 的价格总耗时: {end_time - start_time:.2f} 秒")
-    return {price,priceChangePercent}
+    return price,priceChangePercent
 
 
 def is_binance_symbol(symbol):
