@@ -14,6 +14,7 @@ from ca.binance import get_binance_price
 from ca.binance import get_binance_price
 from save_data import get_wx_info
 
+import configparser
 import threading
 import functools
 import re
@@ -24,6 +25,10 @@ import redis
 import random
 import string
 import logging
+
+
+
+
 
 
 # 配置日志
@@ -116,8 +121,9 @@ def recover_message():
                 # 反向遍历 old_news，避免删除元素影响索引
                 for i in range(len(old_news) - 1, -1, -1):
                     timestamp_ms = int(time.time() * 1000)
-                    if timestamp_ms - old_news[i][1] > 18000 and old_news[i] != 0 :  # 10000ms = 10秒  停留1分40秒
-                        result = wcf.revoke_msg(old_news[i][0])
+                    if timestamp_ms - old_news[i][1] > REVOKE_INTERVAL_MS and old_news[i] != 0 and old_news[i][0]:  # 10000ms = 10秒  停留1分40秒
+                        
+                        result = wcf.revoke_msg(old_news[i][0]) 
                         print('撤回消息{}'.format(result))
                         if result == 1:
                             del old_news[i]  # 删除已撤回的消息
@@ -168,7 +174,7 @@ def fetch_and_process_data(roomid, chainId, ca, data1, data2, time_ms):
     try:
             
         # 获取合约基础信息
-        chain_name = data1["data"]["chainName"] if data1["data"]["chainName"] else '暂无数据'            
+        #chain_name = data1["data"]["chainName"] if data1["data"]["chainName"] else '暂无数据'            
         tokenSymbol = data1["data"]["tokenSymbol"]
         tokenName = data1["data"]["tokenName"]
         price = math_price(float(data1["data"]["price"]))
@@ -218,7 +224,7 @@ def fetch_and_process_data(roomid, chainId, ca, data1, data2, time_ms):
         return {
             "ca": ca,
             "roomid": roomid,
-            "chain_name": chain_name,
+            #"chain_name": chain_name,
             "tokenSymbol": tokenSymbol,
             "tokenName": tokenName,
             "price": price,
@@ -307,6 +313,7 @@ def generate_info_message(data, data_save, data1, data2, is_first_time, time_ms)
             description = translate(data2["data"]['socialMedia']['description']) if data_save["description"] == '暂无叙事' else data_save["description"]
             nowCap = float(data1["data"]["price"]) * float(data1["data"]["circulatingSupply"])
             if data_save['caller_name'] == '数据暂时异常':
+                print('哨兵数据异常，重新获取')
                 caller_simulate_name = None
                 caller_gender = None
                 caller_list = get_wx_info(data['roomid'],data['ca'])
@@ -321,6 +328,7 @@ def generate_info_message(data, data_save, data1, data2, is_first_time, time_ms)
                         caller_gender = data3['gender'] if data3['gender'] else '未知'
                         break  
                 caller_simulate_name = caller_simulate_name if caller_simulate_name  else '数据暂时异常'
+                print(caller_simulate_name)
                 store_nested_data_to_redis(data['roomid'], data['ca'], data['tokenSymbol'],caller_simulate_name, caller_gender,data1, description, data['find_time'])
             random_string = ''.join(random.choices(string.ascii_letters + string.digits, k=14))
             info = (
@@ -334,7 +342,7 @@ def generate_info_message(data, data_save, data1, data2, is_first_time, time_ms)
                 f"🐋top10持仓: {data['top10HoldAmountPercentage']}\n"
                 f"🍭捆绑比例：功能优化中\n\n"
                 f"{data['twitter_info'][0]}{data['twitter_info'][1]}{data['officialWebsite_info'][0]}{data['officialWebsite_info'][1]}{data['telegram_info'][0]}{data['telegram_info'][1]}\n"
-                f"🕵️哨兵：{caller_simulate_name}\n"
+                f"🕵️哨兵：{data_save['caller_name']}\n"
                 f"📈Call: {math_km(data_save['initCap'])} -> {math_km(data_save['topCap'])}\n"
                 f"🚀最大倍数: {str(round(data_save['topCap'] / data_save['initCap'], 2)) + 'X'}\n"
                 f"🔥当前倍数: {str(round(nowCap / float(data_save['initCap']), 2)) + 'X'}\n\n"
@@ -396,45 +404,16 @@ def sol_ca_job():
             continue
 
 
-def sort_response_by_input(input_data, response_data):
-    """
-    根据 input_data 的顺序，重新排列 response_data['data']
-    
-    :param input_data: list，包含请求的合约地址列表
-    :param response_data: dict，包含 API 返回的数据
-    :return: dict，返回和原始 response_data 格式相同，但顺序匹配 input_data
-    """
-    if 'data' not in response_data:
-        return {'msg': '错误: API 返回数据格式不正确', 'code': 400, 'data': []}
-
-    # 创建一个地址 -> 价格的映射表
-    price_dict = {item['address']: item['price'] for item in response_data['data']}
-
-    # 按照 input_data 的顺序重新排序返回数据
-    sorted_data = [{'address': item['address'], 'price': price_dict.get(item['address'], None)} for item in input_data]
-
-    # 生成最终的返回数据，格式和原始 response_data 一致
-    sorted_response = {
-        'msg': response_data.get('msg', '操作成功'),
-        'code': response_data.get('code', 200),
-        'data': sorted_data
-    }
-
-    return sorted_response
-
-
-
-
 
 #ETHS合约的任务
 def eths_ca_job():
     while not stop_event.is_set():
         try:
             if len(eths_ca_jobs) > 0:
-                print('开始sol任务') 
+                print('开始eths任务') 
                 # 反向遍历 sol_ca_jobs，避免删除元素影响索引
                 for i in range(len(eths_ca_jobs) - 1, -1, -1):
-                    time.sleep(0.5)
+                    time.sleep(0.2)
                     roomid = eths_ca_jobs[i][0].roomid
                     ca = eths_ca_jobs[i][1]
                     time_ms = eths_ca_jobs[i][2]
@@ -459,7 +438,7 @@ def eths_ca_job():
                             info, random_string = generate_info_message(data,data_save=data_save,data1=data1, data2=data2, is_first_time=True, time_ms=time_ms)
 
                         if info:
-                            wcf.send_text(info, roomid)
+                            # wcf.send_text(info, roomid)
                             timestamp_ms = int(time.time() * 1000)
                             time.sleep(1)
                             old_news_id = getMyLastestGroupMsgID(keyword=random_string)
@@ -470,6 +449,34 @@ def eths_ca_job():
             logger.error(f"主循环发生错误: {str(e)}", exc_info=True)
             continue    
                      
+
+
+def sort_response_by_input(input_data, response_data):
+    """
+    根据 input_data 的顺序，重新排列 response_data['data']
+    
+    :param input_data: list,包含请求的合约地址列表
+    :param response_data: dict,包含 API 返回的数据
+    :return: dict,返回和原始 response_data 格式相同，但顺序匹配 input_data
+    """
+    if 'data' not in response_data:
+        return {'msg': '错误: API 返回数据格式不正确', 'code': 400, 'data': []}
+
+    # 创建一个地址 -> 价格的映射表
+    price_dict = {item['address']: item['price'] for item in response_data['data']}
+
+    # 按照 input_data 的顺序重新排序返回数据
+    sorted_data = [{'address': item['address'], 'price': price_dict.get(item['address'], None)} for item in input_data]
+
+    # 生成最终的返回数据，格式和原始 response_data 一致
+    sorted_response = {
+        'msg': response_data.get('msg', '操作成功'),
+        'code': response_data.get('code', 200),
+        'data': sorted_data
+    }
+
+    return sorted_response
+
 
 
 # 每5分钟更新top数据和最高倍数数据
@@ -594,7 +601,7 @@ def start_top_update():
                     continue
 
             # 休眠 150 秒
-            time.sleep(30)
+            time.sleep(TOP_UPDATA_S)
 
         except Exception as e:
             logger.error(f"更新排行榜数据时发生错误: {str(e)}", exc_info=True)
@@ -859,6 +866,19 @@ def start_all_tasks():
         recover_message_thread.join()
         print("已停止所有任务")
 
+
+
+config = configparser.ConfigParser()
+try:
+    with open('config.ini', 'r', encoding='utf-8') as f:
+        config.read_file(f)
+    REVOKE_INTERVAL_MS = int(config['Settings']['revoke_interval_ms'])
+    TOP_UPDATA_S =  int(config['Settings']['top_updata_s'])
+
+except Exception as e:
+    print(f"读取配置文件失败，使用默认值: {e}")
+
+print(f"撤回时间间隔配置: {REVOKE_INTERVAL_MS} ms")
 
 
 
