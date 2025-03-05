@@ -142,17 +142,6 @@ def recover_message():
                     all_rankings = {roomid: [] for roomid in groups}
                     last_clear_time = current_time  # 更新上一次清空时间
                     print("已清空排行榜数据和合约数据")
-
-            # 检查是否需要发送排行榜数据
-            if last_send_time is None or (current_time - last_send_time).total_seconds() >= send_interval_hours * 3600:
-                if current_time.minute == 0 and current_time.second == 0:  # 每到整点
-                    for roomid in groups:
-                        rankings = all_rankings.get(roomid, [])
-                        if rankings:
-                            send_leaderboard_to_group(roomid, rankings)
-                            time.sleep(2)  # 每次发送间隔2秒
-                    last_send_time = current_time  # 更新上一次发送时间
-                    print(f"已发送排行榜信息，当前时间: {current_time}，发送间隔: {send_interval_hours}小时")
                 
         except Empty:
             continue
@@ -202,9 +191,9 @@ def fetch_and_process_data(roomid, chainId, ca, data1, data2, time_ms):
             
         # 获取合约基础信息
         #chain_name = data1["data"]["chainName"] if data1["data"]["chainName"] else '暂无数据'            
-        tokenSymbol = data1["data"]["tokenSymbol"]
+        tokenSymbol = data1["data"]["tokenSymbol"] if data1["data"]["tokenSymbol"] else '暂无数据'
         tokenName = data1["data"]["tokenName"]
-        price = math_price(float(data1["data"]["price"]))
+        price = math_price(float(data1["data"]["price"])) if data1["data"]["price"] else '暂无数据'
         marketCap = math_km(float(data1["data"]["marketCap"]))
         circulatingSupply = data1["data"]["circulatingSupply"]
         volume = math_km(float(data1["data"]["volume"]))
@@ -959,17 +948,18 @@ def start_all_tasks():
     eths_job_thread = threading.Thread(target=eths_ca_job)
     eths_job_thread.start()
 
-    # 启动排行榜更新线程
-    top_update_thread = threading.Thread(target=start_top_update)
-    top_update_thread.start()
 
     # 启动撤回消息\00:10情况排行榜数据的的线程
     recover_message_thread = threading.Thread(target=recover_message)
     recover_message_thread.start()
 
     # 启动定时发送排行榜的线程
-    send_leaderboard_periodically_thread = threading.Thread(target=send_leaderboard_periodically(int(1)))
+    send_leaderboard_periodically_thread = threading.Thread(target=send_leaderboard_periodically, args=(4,))
     send_leaderboard_periodically_thread.start()
+
+    # 启动排行榜更新线程
+    top_update_thread = threading.Thread(target=start_top_update)
+    top_update_thread.start()
 
 
 
