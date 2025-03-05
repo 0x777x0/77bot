@@ -1,7 +1,7 @@
 
 from wcferry import Wcf
 from queue import Empty
-from ca.ca_info import is_solca, is_eths, math_price, math_cex_price, math_km, math_percent, math_bjtime, get_bundles, is_cexToken, is_pump
+from ca.ca_info import is_solca, is_eths, math_price, math_cex_price, math_cex_priceChangePercent, math_km, math_percent, math_bjtime, get_bundles, is_cexToken, is_pump
 from command.command import command_id
 from httpsss.oke import fetch_oke_latest_info, fetch_oke_overview_info
 from httpsss.onchain import get_price_onchain
@@ -9,9 +9,8 @@ from common.socialMedia_info import is_x, is_web, is_TG
 from common.translate import translate
 from datetime import datetime, timedelta, timezone
 from common.bjTime import convert_timestamp_to_beijing_time
-from ca.binance import get_binance_price
+from ca.exchange import get_exchange_price
 # from common.cache import redis
-from ca.binance import get_binance_price
 from save_data import get_wx_info
 
 import configparser
@@ -89,6 +88,7 @@ def get_nested_data_from_redis(roomid, ca_ca):
     else:
         return None
 
+
 # 获取 Redis 中存储的列表数据
 def get_data_from_redis(redis_key):
     data = r.lrange(redis_key, 0, -1)  # 获取整个列表
@@ -109,15 +109,20 @@ def getMyLastestGroupMsgID(keyword) -> dict:
     print(msgs)
     return msgs[0].get("MsgSvrID") if msgs else 0
 
-# 撤回消息的方法
+
+# 撤回消息和清空排行榜、合约数据的方法
 def recover_message():
+    global all_rankings
+    last_clear_time = None  # 记录上一次清空的时间
+    last_send_time = None  # 记录上一次发送排行榜的时间
+    send_interval_hours = 1  # 默认发送间隔为1小时，可以根据需要动态调整
+
     while not stop_event.is_set():
         time.sleep(10)
         print('开始撤回消息')
         try:
             if len(old_news) > 0:
                 print(old_news)
-                #print('开始撤回消息')
                 # 反向遍历 old_news，避免删除元素影响索引
                 for i in range(len(old_news) - 1, -1, -1):
                     timestamp_ms = int(time.time() * 1000)
@@ -127,6 +132,28 @@ def recover_message():
                         print('撤回消息{}'.format(result))
                         if result == 1:
                             del old_news[i]  # 删除已撤回的消息
+            
+            # 检查是否需要清空排行榜数据
+            current_time = datetime.now()
+            if current_time.hour == 0 and current_time.minute == 10:
+                # 检查上一次清空时间是否超过 1 分钟
+                if last_clear_time is None or (current_time - last_clear_time).total_seconds() >= 25:
+                    clear_leaderboard()  # 重置内存中的排行榜数据
+                    all_rankings = {roomid: [] for roomid in groups}
+                    last_clear_time = current_time  # 更新上一次清空时间
+                    print("已清空排行榜数据和合约数据")
+
+            # 检查是否需要发送排行榜数据
+            if last_send_time is None or (current_time - last_send_time).total_seconds() >= send_interval_hours * 3600:
+                if current_time.minute == 0 and current_time.second == 0:  # 每到整点
+                    for roomid in groups:
+                        rankings = all_rankings.get(roomid, [])
+                        if rankings:
+                            send_leaderboard_to_group(roomid, rankings)
+                            time.sleep(2)  # 每次发送间隔2秒
+                    last_send_time = current_time  # 更新上一次发送时间
+                    print(f"已发送排行榜信息，当前时间: {current_time}，发送间隔: {send_interval_hours}小时")
+                
         except Empty:
             continue
         except Exception as e:
@@ -200,7 +227,7 @@ def fetch_and_process_data(roomid, chainId, ca, data1, data2, time_ms):
         # 获取池子创建时间
         #先从raydium 获取时间
         
-        find_pool_create_time = '暂未发现'
+        """ find_pool_create_time = '暂未发现'
         
         if chainId == 501:
             pool_create_time = get_pool_create_time(501, ca)
@@ -211,7 +238,7 @@ def fetch_and_process_data(roomid, chainId, ca, data1, data2, time_ms):
             
             else:
                 dt_object = datetime.fromtimestamp(pool_create_time/1000)
-                find_pool_create_time = dt_object.strftime('%m-%d %H:%M:%S')  # 格式：年-月-日 时:分:秒
+                find_pool_create_time = dt_object.strftime('%m-%d %H:%M:%S')  # 格式：年-月-日 时:分:秒 """
         
             
         # 记录哨兵caller信息
@@ -236,7 +263,7 @@ def fetch_and_process_data(roomid, chainId, ca, data1, data2, time_ms):
             "twitter_info": twitter_info,
             "officialWebsite_info": officialWebsite_info,
             "telegram_info": telegram_info,
-            "find_pool_create_time": find_pool_create_time,
+            #"find_pool_create_time": find_pool_create_time,
             'find_time':time_ms
         }
     except Exception as e:
@@ -328,8 +355,10 @@ def generate_info_message(data, data_save, data1, data2, is_first_time, time_ms)
                         caller_gender = data3['gender'] if data3['gender'] else '未知'
                         break  
                 caller_simulate_name = caller_simulate_name if caller_simulate_name  else '数据暂时异常'
-                print(caller_simulate_name)
-                store_nested_data_to_redis(data['roomid'], data['ca'], data['tokenSymbol'],caller_simulate_name, caller_gender,data1, description, data['find_time'])
+                if caller_simulate_name != '数据暂时异常':
+                    store_nested_data_to_redis(data['roomid'], data['ca'], data['tokenSymbol'],caller_simulate_name, caller_gender,data1, description, data['find_time'])
+                    data_save = get_nested_data_from_redis(roomid=data['roomid'], ca_ca=data['ca'])
+            
             random_string = ''.join(random.choices(string.ascii_letters + string.digits, k=14))
             info = (
                 f"{data['ca']}\n"
@@ -357,6 +386,7 @@ def generate_info_message(data, data_save, data1, data2, is_first_time, time_ms)
     except Exception as e:
         logger.error(f'生成消息时发生错误：{str(e)}',exc_info = True)
         return None, None
+
 
 #sol合约的任务
 def sol_ca_job():
@@ -404,7 +434,6 @@ def sol_ca_job():
             continue
 
 
-
 #ETHS合约的任务
 def eths_ca_job():
     while not stop_event.is_set():
@@ -450,7 +479,7 @@ def eths_ca_job():
             continue    
                      
 
-
+#根据 input_data 的顺序，重新排列 response_data['data']
 def sort_response_by_input(input_data, response_data):
     """
     根据 input_data 的顺序，重新排列 response_data['data']
@@ -478,14 +507,112 @@ def sort_response_by_input(input_data, response_data):
     return sorted_response
 
 
+#定时发送排行榜信息。
 
-# 每5分钟更新top数据和最高倍数数据
-def start_top_update():
-    """pricetopCap
-    定时更新排行榜数据。
+def send_leaderboard_periodically(send_interval_hours:int):
     """
-    # 初始化全局 rankings 字典，用于存储每个群组的排行榜数据
-    global_rankings = {roomid: [] for roomid in groups}
+    独立线程：定时发送排行榜信息。
+    
+    :param send_interval_hours: 发送间隔（小时）
+    """
+    last_send_time = None  # 记录上一次发送的时间
+
+    while not stop_event.is_set():
+        current_time = datetime.now()
+        
+        # 检查是否到达整点
+        if current_time.minute == 0 and current_time.second == 0:
+            # 检查是否满足时间间隔
+            if last_send_time is None or (current_time - last_send_time).total_seconds() >= send_interval_hours * 3600:
+                for roomid in groups:
+                    rankings = all_rankings.get(roomid, [])
+                    if rankings:
+                        send_leaderboard_to_group(roomid, rankings)
+                        time.sleep(1)  # 每次发送间隔2秒
+                last_send_time = current_time  # 更新上一次发送时间
+                print(f"已发送排行榜信息，当前时间: {current_time}，发送间隔: {send_interval_hours}小时")
+        
+        time.sleep(1)  # 每秒检查一次时间
+
+
+#发送排行榜数据的方法
+def send_leaderboard_to_group(roomid, rankings):
+    """将排行榜数据发送到指定群组"""
+    try:
+        # 检查排行榜数据是否为空
+        if not rankings:
+            wcf.send_text("暂无排行榜数据，群友快快发金狗", roomid)
+            print(f"分组 {roomid} 的排行榜数据为空")
+            return
+
+        # 只取前 10 名
+        top_10_rankings = rankings[:10]
+
+        # 排行榜标题
+        leaderboard_msg = "🎉   🏅   🎉   🏅   🎉   🏅   🎉\n"
+        leaderboard_msg += "🏆🌟     Top10  排行榜    🌟🏆\n"
+        leaderboard_msg += "━ ━ ━ ━ ━ ━ ━ ━ ━ ━ ━\n"
+
+        for idx, entry in enumerate(top_10_rankings, start=1):
+            # 根据性别选择头像
+            if entry.get('caller_gender') == '女':
+                avatar = "👩"  # 女性头像
+            else:
+                avatar = "👨"  # 男性头像或默认头像
+
+            # 根据排名选择奖牌
+            if idx == 1:
+                rank_emoji = "🥇" + avatar  # 第一名
+            elif idx == 2:
+                rank_emoji = "🥈" + avatar  # 第二名
+            elif idx == 3:
+                rank_emoji = "🥉" + avatar  # 第三名
+            else:
+                rank_emoji = f"{idx}." + avatar  # 其他名次
+
+            leaderboard_msg += (
+                f"{rank_emoji} {entry['caller_name']}\n"
+                f"   💰  {entry['tokenSymbol']}   🚀 {entry['ratio']:.2f}X\n"
+                f"━ ━ ━ ━ ━ ━ ━ ━ ━ ━ ━\n"
+            )
+
+        # 如果数据不足 10 条，添加提示信息
+        if len(top_10_rankings) < 10:
+            leaderboard_msg += "\n⚠️ 当前排行榜数据不足 10 条\n"
+
+        # 排行榜底部装饰
+        leaderboard_msg += "🎉🏅   恭喜老板上榜   🏅🎉\n"
+        leaderboard_msg += "🎉   🏅   🎉   🏅   🎉   🏅   🎉"
+
+        wcf.send_text(leaderboard_msg, roomid)
+        print(f"已发送排行榜到分组 {roomid}:\n{leaderboard_msg}")
+    except Exception as e:
+        logger.error(f"发送排行榜数据到群组 {roomid} 时发生错误: {str(e)}", exc_info=True)
+
+
+#清空排行榜数据
+def clear_leaderboard():
+    """清空排行榜数据"""
+    try:
+        for roomid in groups:
+            r.delete(f"leaderboard_{roomid}")
+            logger.info(f"已清空群组 {roomid} 的排行榜数据")
+
+            # 清空合约代币数据
+            r.delete(roomid)
+            logger.info(f"已清空群组 {roomid} 的合约代币数据")
+    except Exception as e:
+        logger.error(f"清空排行榜数据时发生错误: {str(e)}", exc_info=True)
+
+
+#定时更新排行榜数据，并实现整点发送和每日清空功能
+def start_top_update():
+    """定时更新排行榜数据，并实现整点发送和每日清空功能"""
+    global all_rankings 
+    all_rankings = {roomid: [] for roomid in groups}
+   
+    # 上一次发送排行榜数据的时间
+    last_send_time = None
 
     while not stop_event.is_set():
         try:
@@ -503,7 +630,9 @@ def start_top_update():
                         continue
 
                     # 获取上一次的排行榜数据
-                    rankings = global_rankings.get(roomid, [])
+                    print('________________________')
+                    
+                    rankings = all_rankings.get(roomid, [])
 
                     # 将合约地址分成每 10 个一组
                     ca_list = list(ca_data.items())
@@ -524,7 +653,7 @@ def start_top_update():
 
                         # 批量查询价格
                         result1 = get_price_onchain(payload)
-                        result2 = sort_response_by_input(payload,result1)
+                        result2 = sort_response_by_input(payload, result1)
                         if not result2 or 'data' not in result2:
                             logger.warning(f"批量查询价格失败: {result2}")
                             continue
@@ -540,57 +669,43 @@ def start_top_update():
 
                             # 获取最新价格
                             price = float(price_data['price'])
-                            newCap = price * data1['circulatingSupply'] if price else (data1['topCap']/1.15)
-                            """ print('------------------------')
-                            print(data1['tokenSymbol'])
-                            print(price)
-                            print(data1['circulatingSupply'])
-                            print(data1['initCap'])
-                            print(newCap)
-                            print(data1['topCap']) """
+                            newCap = price * data1['circulatingSupply'] if price else (data1['topCap'] / 1.15)
+
                             # 检查是否创新高
                             random_number = round(random.uniform(1.10, 1.20), 2)
                             if random_number * newCap > data1['topCap']:
                                 ath_time = math_bjtime()
                                 print('{}创新高,市值突破{}新高时间为{}'.format(data1['tokenSymbol'], random_number * newCap, ath_time))
                                 data1['topCap'] = random_number * newCap
-                                # 计算 topCap / initCap
                                 ratio = data1['topCap'] / data1['initCap']
-                                # 更新 Redis 中的数据
                                 r.hset(roomid, ca_ca, json.dumps(data1))
 
                                 # 更新 rankings 中的数据
-                                # 查找是否已经存在该代币的数据
                                 existing_entry = next((entry for entry in rankings if entry['tokenSymbol'] == data1['tokenSymbol']), None)
                                 if existing_entry:
-                                    # 如果存在，更新 ratio
                                     existing_entry['ratio'] = ratio
                                 else:
-                                    # 如果不存在，添加新数据
                                     rankings.append({
                                         'tokenSymbol': data1['tokenSymbol'],
                                         'caller_name': data1['caller_name'],
                                         'ratio': ratio
                                     })
                             else:
-                            # 如果未创新高，直接使用已有的 ratio
                                 ratio = data1['topCap'] / data1['initCap']
-                                # 查找是否已经存在该代币的数据
                                 existing_entry = next((entry for entry in rankings if entry['tokenSymbol'] == data1['tokenSymbol']), None)
                                 if not existing_entry:
-                                    # 如果不存在，添加新数据
                                     rankings.append({
                                         'tokenSymbol': data1['tokenSymbol'],
                                         'caller_name': data1['caller_name'],
                                         'caller_gender': data1['caller_gender'],
                                         'ratio': ratio
-                                    })   
+                                    })
 
                     # 按 ratio 从高到低排序
                     rankings.sort(key=lambda x: x['ratio'], reverse=True)
 
-                    # 更新全局 rankings 数据
-                    global_rankings[roomid] = rankings
+                    # 更新总 rankings 数据
+                    all_rankings[roomid] = rankings
 
                     # 将排行榜数据存储到 Redis 中
                     r.set(f"leaderboard_{roomid}", json.dumps(rankings))
@@ -599,8 +714,9 @@ def start_top_update():
                 except Exception as e:
                     logger.error(f"更新群组 {roomid} 的排行榜数据时发生错误: {str(e)}", exc_info=True)
                     continue
+   
 
-            # 休眠 150 秒
+            # 休眠 180 秒
             time.sleep(TOP_UPDATA_S)
 
         except Exception as e:
@@ -608,8 +724,7 @@ def start_top_update():
             continue
 
 
-
- # 启动微信消息监听的线程
+# 启动微信消息监听的线程
 def start_wcf_listener():
     wcf.enable_receiving_msg()
     print('机器人启动')
@@ -618,7 +733,7 @@ def start_wcf_listener():
         try:
             msg = wcf.get_msg()
             # 处理消息的逻辑...
-            time.sleep(0.2)
+            time.sleep(0.3)
             # print('222222')
             """ if msg.content == "滚kkkkkkkkkkk":
                 wcf.send_text("好的，小瓜瓜，爱你爱你哦,周末一起玩",msg.sender)
@@ -640,14 +755,16 @@ def start_wcf_listener():
             if msg.from_group() and is_cexToken(msg.content) and msg.content!= '/top' and msg.roomid in groups :
                 
                 token_symble = msg.content[1:]
-                token_price = get_binance_price(token_symble)
+                token_price, token_priceChangePercent = get_exchange_price(token_symble)
                 print(type(token_price))
 
                 if float(token_price) > 0 :
                     token_price = float(token_price)
                     token_price = math_cex_price(token_price)
+                    token_priceChangePercent = float(token_priceChangePercent)
+                    token_priceChangePercent = math_cex_priceChangePercent(token_priceChangePercent)
                     print('{}当前的price为:{}'.format(token_symble,token_price)) 
-                    wcf.send_text('{}当前的price为:{}'.format(token_symble,token_price),msg.roomid)
+                    wcf.send_text('{}: {} ({})'.format(token_symble,token_price,token_priceChangePercent),msg.roomid)
             
             # 记录用户发言次数（使用昵称）
             if msg.from_group() and msg.roomid in groups:
@@ -846,11 +963,14 @@ def start_all_tasks():
     top_update_thread = threading.Thread(target=start_top_update)
     top_update_thread.start()
 
-    # 启动撤回消息的线程
+    # 启动撤回消息\00:10情况排行榜数据的的线程
     recover_message_thread = threading.Thread(target=recover_message)
     recover_message_thread.start()
 
-    
+    # 启动定时发送排行榜的线程
+    send_leaderboard_periodically_thread = threading.Thread(target=send_leaderboard_periodically(int(1)))
+    send_leaderboard_periodically_thread.start()
+
 
 
     # 等待线程结束（如果需要的话）
@@ -885,6 +1005,7 @@ print(f"撤回时间间隔配置: {REVOKE_INTERVAL_MS} ms")
 
 #timestamp_1 = 0
 stop_event = threading.Event()  # 控制线程停止的事件
+all_rankings = {}
 sol_ca_jobs = []
 eths_ca_jobs = []
 
@@ -896,9 +1017,7 @@ r = redis.StrictRedis(host='localhost', port=6379, db=0, decode_responses=True)
 # '53951514521@chatroom'
 groups = ["58224083481@chatroom",'52173635194@chatroom']
 
-""" result = wcf.get_info_by_wxid(wxid='wxid_byf2dprve20n22')
 
-print(result) """
 
 start_all_tasks()
 

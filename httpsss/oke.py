@@ -25,10 +25,7 @@ def fetch_oke_latest_info(chainId,ca_ca, max_retries=3, retry_delay=0.5):
     :param retry_delay: 重试间隔时间（默认 500 毫秒）
     :return: 返回 API 响应数据JSON 格式），如果请求失败则返回 None。
     """
-    
-    
-    
-    
+     
     url = "https://www.okx.com/priapi/v1/dx/market/v2/latest/info"
     params = {
         "chainId": chainId,
@@ -42,7 +39,7 @@ def fetch_oke_latest_info(chainId,ca_ca, max_retries=3, retry_delay=0.5):
 
             # 发送 GET 请求
             start_time = datetime.now()
-            response = requests.get(url, params=params, timeout=10)  # 设置超时时间为 10 秒
+            response = requests.get(url, params=params, timeout=7)  # 设置超时时间为 7 秒
             elapsed_time = (datetime.now() - start_time).total_seconds()
 
             # 记录请求耗时
@@ -95,7 +92,7 @@ def fetch_oke_overview_info(chainId, ca_ca, max_retries=3, retry_delay=0.5):
 
             # 发送 GET 请求
             start_time = datetime.now()
-            response = requests.get(url, params=params, timeout=10)  # 设置超时时间为 10 秒
+            response = requests.get(url, params=params, timeout=7)  # 设置超时时间为 7 秒
             elapsed_time = (datetime.now() - start_time).total_seconds()
 
             # 记录请求耗时

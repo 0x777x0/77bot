@@ -41,7 +41,7 @@ def get_price_onchain(payload, max_retries=3, retry_delay=0.5):
 
             # 发送 POST 请求
             start_time = datetime.now()
-            response = requests.post(url, data=json.dumps(payload), headers=headers, timeout=10)  # 设置超时时间为 10 秒
+            response = requests.post(url, data=json.dumps(payload), headers=headers, timeout=7)  # 设置超时时间为 7 秒
             elapsed_time = (datetime.now() - start_time).total_seconds()
 
             # 记录请求耗时

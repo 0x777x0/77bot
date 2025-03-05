@@ -65,7 +65,25 @@ def math_cex_price(content:float):
         return f"{content:.6f}"
     else :
         return round(content, 8 - int(math.floor(math.log10(abs(content)))) - 1)
-        
+
+def math_cex_priceChangePercent(content:float):
+
+    """
+    将数字格式化为保留小数点后两位并添加百分号，正数前添加 + 号。
+
+    :param number: 输入的数字（可以是正数或负数）
+    :return: 格式化后的字符串，例如 "+5.56%" 或 "-10.67%"
+    """
+    # 格式化数字，保留两位小数
+    formatted_number = f"{content:.2f}%"
+    
+    # 如果是正数，添加 + 号
+    if content > 0:
+        formatted_number = f"+{formatted_number}"
+    
+    return formatted_number
+
+     
 def math_km(content):
     
     if  content < 1000:

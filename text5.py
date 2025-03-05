@@ -1,11 +1,11 @@
 
 
 
+from ca.binance import get_binance_price
 
 
 
 
+token_price = get_binance_price('eth')
 
-result = get_info_by_wxid(wxid_byf2dprve20n22)
-
-print(result)
+print(token_price)
