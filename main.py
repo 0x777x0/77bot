@@ -237,9 +237,21 @@ def fetch_and_process_data(roomid, chainId, ca, data1, data2, time_ms):
         # _, total_holding_percentage = get_bundles(address=ca_ca)         
         
         # 获取社交信息
-        twitter = data2["data"]["socialMedia"]["twitter"]                  
-        officialWebsite = data2["data"]["socialMedia"]["officialWebsite"]
-        telegram = data2["data"]["socialMedia"]["telegram"]
+        try:
+            twitter = data2["data"]["socialMedia"]["twitter"] if data2["data"]["socialMedia"]["twitter"] else '暂无数据'
+        except KeyError:
+            twitter = '暂无数据'
+            
+        try:
+            officialWebsite = data2["data"]["socialMedia"]["officialWebsite"] if data2["data"]["socialMedia"]["officialWebsite"] else '暂无数据'
+        except KeyError:
+            officialWebsite = '暂无数据'
+
+        try:
+            telegram = data2["data"]["socialMedia"]["telegram"] if data2["data"]["socialMedia"]["telegram"] else '暂无数据'
+        except KeyError:
+            telegram = '暂无数据'
+
         # 对社交信息进行验证
         twitter_info = is_x(twitter) 
         officialWebsite_info = is_web(officialWebsite)
