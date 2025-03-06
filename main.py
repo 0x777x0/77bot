@@ -206,12 +206,31 @@ def fetch_and_process_data(roomid, chainId, ca, data1, data2, time_ms):
         except KeyError:
             price = '暂无数据'
 
-    
-        marketCap = math_km(float(data1["data"]["marketCap"]))
-        circulatingSupply = data1["data"]["circulatingSupply"]
-        volume = math_km(float(data1["data"]["volume"]))
-        holders = data1["data"]["holders"]
-        top10HoldAmountPercentage = math_percent(float(data1["data"]["top10HoldAmountPercentage"]))  
+        try:
+            marketCap = math_km(float(data1["data"]["marketCap"])) if data1["data"]["marketCap"] else '暂无数据'
+        except KeyError:
+            marketCap = '暂无数据'
+
+        try:
+            circulatingSupply = data1["data"]["circulatingSupply"] if data1["data"]["circulatingSupply"] else '暂无数据'
+        except KeyError:
+            circulatingSupply = '暂无数据'
+        
+        try:
+            volume = math_km(float(data1["data"]["volume"])) if data1["data"]["volume"] else '暂无数据'
+        except KeyError:
+            volume = '暂无数据'
+
+        try:
+            holders = data1["data"]["holders"] if data1["data"]["holders"] else '暂无数据'
+        except KeyError:
+            holders = '暂无数据'
+
+        try:
+            top10HoldAmountPercentage = math_percent(float(data1["data"]["top10HoldAmountPercentage"])) if data1["data"]["top10HoldAmountPercentage"] else '暂无数据'
+        except KeyError:
+            top10HoldAmountPercentage = '暂无数据'
+
         
         #获取捆绑信息
         total_holding_percentage = '功能优化中'
