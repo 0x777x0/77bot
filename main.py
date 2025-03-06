@@ -191,9 +191,22 @@ def fetch_and_process_data(roomid, chainId, ca, data1, data2, time_ms):
             
         # 获取合约基础信息
         #chain_name = data1["data"]["chainName"] if data1["data"]["chainName"] else '暂无数据'            
-        tokenSymbol = data1["data"]["tokenSymbol"] if data1["data"]["tokenSymbol"] else '暂无数据'
-        tokenName = data1["data"]["tokenName"]
-        price = math_price(float(data1["data"]["price"])) if data1["data"]["price"] else '暂无数据'
+        try:
+            tokenSymbol = data1["data"]["tokenSymbol"] if data1["data"]["tokenSymbol"] else '暂无数据'
+        except KeyError:
+            tokenSymbol = '暂无数据'
+
+        try:
+            tokenName = data1["data"]["tokenName"] if data1["data"]["tokenName"] else '暂无数据'
+        except KeyError:
+            tokenSymbol = '暂无数据'
+        
+        try:
+            price = math_price(float(data1["data"]["price"])) if data1["data"]["price"] else '暂无数据'
+        except KeyError:
+            price = '暂无数据'
+
+    
         marketCap = math_km(float(data1["data"]["marketCap"]))
         circulatingSupply = data1["data"]["circulatingSupply"]
         volume = math_km(float(data1["data"]["volume"]))
