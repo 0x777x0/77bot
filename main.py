@@ -278,27 +278,30 @@ def fetch_and_process_data(roomid, chainId, ca, data1, data2, time_ms):
         # 先拿到当前caller的昵称                       
         # caller_wxid = sol_ca_jobs[i][0].sender  
         #chatroom_members = wcf.get_chatroom_members(roomid = roomid)
+        if price != '暂无数据':
         
+            # 返回处理后的数据
+            return {
+                "ca": ca,
+                "roomid": roomid,
+                "chainId": chainId,
+                "tokenSymbol": tokenSymbol,
+                "tokenName": tokenName,
+                "price": price,
+                "marketCap": marketCap,
+                "circulatingSupply": circulatingSupply,
+                "volume": volume,
+                "holders": holders,
+                "top10HoldAmountPercentage": top10HoldAmountPercentage,
+                "twitter_info": twitter_info,
+                "officialWebsite_info": officialWebsite_info,
+                "telegram_info": telegram_info,
+                #"find_pool_create_time": find_pool_create_time,
+                'find_time':time_ms
+            }
+        else:
+            return None
         
-        # 返回处理后的数据
-        return {
-            "ca": ca,
-            "roomid": roomid,
-            "chainId": chainId,
-            "tokenSymbol": tokenSymbol,
-            "tokenName": tokenName,
-            "price": price,
-            "marketCap": marketCap,
-            "circulatingSupply": circulatingSupply,
-            "volume": volume,
-            "holders": holders,
-            "top10HoldAmountPercentage": top10HoldAmountPercentage,
-            "twitter_info": twitter_info,
-            "officialWebsite_info": officialWebsite_info,
-            "telegram_info": telegram_info,
-            #"find_pool_create_time": find_pool_create_time,
-            'find_time':time_ms
-        }
     except Exception as e:
         logger.error(f"获取或处理数据时发生错误: {str(e)}", exc_info=True)
         return None
@@ -536,6 +539,7 @@ def sol_ca_job():
                     if data1 and data2 :
                         data =  fetch_and_process_data(roomid=roomid,chainId=501, ca=ca, data1=data1, data2=data2, time_ms=time_ms)
                         if not data:
+                            del sol_ca_jobs[i]
                             continue
 
                         # 判断该 ca 在当前群组是不是首次出现
@@ -581,6 +585,7 @@ def eths_ca_job():
                     if data1 and data2 :
                         data =  fetch_and_process_data(roomid=roomid, chainId=56, ca=ca, data1=data1, data2=data2, time_ms=time_ms)
                         if not data:
+                            del eths_ca_jobs[i]
                             continue
 
                         # 判断该 ca 在当前群组是不是首次出现
