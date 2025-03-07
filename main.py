@@ -199,7 +199,7 @@ def fetch_and_process_data(roomid, chainId, ca, data1, data2, time_ms):
         try:
             tokenName = data1["data"]["tokenName"] if data1["data"]["tokenName"] else '暂无数据'
         except KeyError:
-            tokenSymbol = '暂无数据'
+            tokenName = '暂无数据'
         
         try:
             price = math_price(float(data1["data"]["price"])) if data1["data"]["price"] else '暂无数据'
@@ -284,7 +284,7 @@ def fetch_and_process_data(roomid, chainId, ca, data1, data2, time_ms):
         return {
             "ca": ca,
             "roomid": roomid,
-            #"chain_name": chain_name,
+            "chainId": chainId,
             "tokenSymbol": tokenSymbol,
             "tokenName": tokenName,
             "price": price,
@@ -324,25 +324,34 @@ def generate_info_message(data, data_save, data1, data2, is_first_time, time_ms)
         # 格式化输出
         find_time = beijing_time.strftime("%m-%d %H:%M:%S")
         
-        if is_first_time:
-            caller_simulate_name = None
-            caller_gender = None
-            caller_list = get_wx_info(data['roomid'],data['ca'])
+        #跨账号拿取wxid
+        caller_simulate_name = None
+        caller_gender = None
+        wxId = None
+        caller_list = get_wx_info(data['roomid'],data['ca'])
             
-            for i in range(len(caller_list)):
-                diff = abs(caller_list[i]['times']- time_ms )
-                diff_seconds = diff/1000.0
-                if diff_seconds <= 6 :
-                    caller_simulate_name = caller_list[i]['wxNick']
-                    data3 = wcf.get_info_by_wxid(caller_list[i]['wxId'])
-                    print('~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~')
-                    print(data3)
-                    caller_gender = data3['gender'] if data3['gender'] else '未知'
-                    break  
-            caller_simulate_name = caller_simulate_name if caller_simulate_name  else '数据暂时异常'
-
+        for i in range(len(caller_list)):
+            diff = abs(caller_list[i]['times']- time_ms )
+            diff_seconds = diff/1000.0
+            if diff_seconds <= 8 :
+                caller_simulate_name = caller_list[i]['wxNick']
+                wxId = caller_list[i]['wxId']
+                data3 = wcf.get_info_by_wxid(caller_list[i]['wxId'])
+                #print('~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~')
+                #print(data3)
+                caller_gender = data3['gender'] if data3['gender'] else '未知'
+                break  
+        caller_simulate_name = caller_simulate_name if caller_simulate_name  else '数据暂时异常'
+        wxId = wxId if wxId else '数据暂时异常'
+        
+        if is_first_time:
+            
             #cp_time = '发射时间' if is_pump(data["ca"]) else '创建时间'
-            description = translate(data2["data"]['socialMedia']['description']) if data2["data"]['socialMedia']['description'] else '暂无叙事'
+            try:
+                description = translate(data2["data"]['socialMedia']['description']) if data2["data"]['socialMedia']['description'] else '暂无叙事'
+            except KeyError:
+                description = '暂无数据'
+            
             random_string = ''.join(random.choices(string.ascii_letters + string.digits, k=14))
             info = (
                 f"{data['ca']}\n"
@@ -364,32 +373,21 @@ def generate_info_message(data, data_save, data1, data2, is_first_time, time_ms)
                 #f"🎯{cp_time}:{data['find_pool_create_time']}"
             )
             wcf.send_text(info, data['roomid'])
+            
+            
             """ timestamp_2 = int(time.time() * 1000)
             hs = (timestamp_2 - timestamp_1)/1000
             print('总耗时{}'.format(hs)) """
 
-            store_nested_data_to_redis(data['roomid'], data['ca'], data['tokenSymbol'],caller_simulate_name, caller_gender,data1, description, data['find_time'])
+            store_nested_data_to_redis(data['roomid'],data['ca'], data['tokenSymbol'],caller_simulate_name, caller_gender,data1, description, data['find_time'])
         else:
             description = translate(data2["data"]['socialMedia']['description']) if data_save["description"] == '暂无叙事' else data_save["description"]
             nowCap = float(data1["data"]["price"]) * float(data1["data"]["circulatingSupply"])
             if data_save['caller_name'] == '数据暂时异常':
                 print('哨兵数据异常，重新获取')
-                caller_simulate_name = None
-                caller_gender = None
-                caller_list = get_wx_info(data['roomid'],data['ca'])
-                for i in range(len(caller_list)):
-                    diff = abs(caller_list[i]['times']- time_ms )
-                    diff_seconds = diff/1000.0
-                    if diff_seconds <= 8 :
-                        caller_simulate_name = caller_list[i]['wxNick']
-                        data3 = wcf.get_info_by_wxid(caller_list[i]['wxId'])
-                        print('~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~')
-                        print(data3)
-                        caller_gender = data3['gender'] if data3['gender'] else '未知'
-                        break  
-                caller_simulate_name = caller_simulate_name if caller_simulate_name  else '数据暂时异常'
+                         
                 if caller_simulate_name != '数据暂时异常':
-                    store_nested_data_to_redis(data['roomid'], data['ca'], data['tokenSymbol'],caller_simulate_name, caller_gender,data1, description, data['find_time'])
+                    store_nested_data_to_redis(data['roomid'],data['ca'], data['tokenSymbol'],caller_simulate_name, caller_gender,data1, description, data['find_time'])
                     data_save = get_nested_data_from_redis(roomid=data['roomid'], ca_ca=data['ca'])
             
             random_string = ''.join(random.choices(string.ascii_letters + string.digits, k=14))
@@ -413,12 +411,110 @@ def generate_info_message(data, data_save, data1, data2, is_first_time, time_ms)
                 #f"🎯创建时间：{data['find_pool_create_time']}"
             )
             wcf.send_text(info, data['roomid'])
+        
+        #将用户的首次喊单数据进行存储    
+        if caller_simulate_name != '数据暂时异常' and wxId!= '数据暂时异常':
+            
+            # 构造需要存储的列表数据
+            new_data = [
+                wxId,
+                caller_simulate_name,
+                data['chainId'],
+                data['ca'],
+                float(data['circulatingSupply']) * float(data['price']),
+                float(data['circulatingSupply']) * float(data['price']),
+                data['circulatingSupply'],
+                data['price'],
+                data["find_time"]
+            ]
+            store_person_ca(new_data=new_data)
+
+                
+
+
+            """ if len(person_ca) > 0:
+                for i in range(len(person_ca)):
+                    if wxId == person_ca[i][0] and data['ca'] == person_ca[i][3]:
+                        pass
+                    else:
+                        person_ca.append([
+                            wxId,
+                            caller_simulate_name,
+                            data['chainId'],
+                            data['ca'],
+                            float(data['circulatingSupply'])*float(data['price']),
+                            float(data['circulatingSupply'])*float(data['price']),
+                            data['circulatingSupply'],
+                            data['price'],
+                            data["find_time"]
+                        ])
+
+                        
+            else:
+                person_ca.append([
+                    wxId,
+                    caller_simulate_name,
+                    data['chainId'],
+                    data['ca'],
+                    float(data['circulatingSupply'])*float(data['price']),
+                    float(data['circulatingSupply'])*float(data['price']),
+                    data['circulatingSupply'],
+                    data['price'],
+                    data["find_time"]
+                ]) """
+
+        
         return info,random_string
 
 
     except Exception as e:
         logger.error(f'生成消息时发生错误：{str(e)}',exc_info = True)
         return None, None
+
+
+def store_person_ca(new_data):
+    """
+    将 new_data 存储到 Redis 中，确保没有重复数据。
+    
+    参数:
+        new_data (list): 需要存储的数据，格式为 [wxId, caller_simulate_name, chainId, ca, total_value1, total_value2, circulatingSupply, price, find_time]
+    """
+    try:
+        # 解析 new_data
+        wxId = new_data[0]
+        ca = new_data[3]
+
+        # 检查 Redis 中是否存在该键
+        if r.exists(REDIS_KEY):
+            # 如果 Redis 中的列表不为空，获取列表中的所有数据
+            person_ca_list = r.lrange(REDIS_KEY, 0, -1)
+            should_store = True  # 默认需要存储数据
+
+            # 遍历列表中的每条数据
+            for item in person_ca_list:
+                # 如果 item 是字节类型，解码为字符串
+                if isinstance(item, bytes):
+                    item = item.decode()
+                # 将字符串拆分为列表
+                item_data = item.split(',')
+                # 检查是否满足条件
+                if wxId == item_data[0] and ca == item_data[3]:
+                    should_store = False  # 如果条件满足，则不存储
+                    break  # 发现重复数据，直接退出循环
+
+            # 如果满足条件，存储数据
+            if should_store:
+                r.rpush(REDIS_KEY, ','.join(map(str, new_data)))
+                print("数据已存储到 Redis 中。")
+            else:
+                print("数据已存在，未存储。")
+        else:
+            # 如果 Redis 中的列表为空，直接存储数据
+            r.rpush(REDIS_KEY, ','.join(map(str, new_data)))
+            print("数据已存储到 Redis 中。")
+    except Exception as e:
+        print(f"存储数据时出错: {e}")
+
 
 
 #sol合约的任务
@@ -511,6 +607,90 @@ def eths_ca_job():
             logger.error(f"主循环发生错误: {str(e)}", exc_info=True)
             continue    
                      
+
+def person_ca_max():
+    while not stop_event.is_set():
+        try:
+            if len(person_ca_jobs) > 0:
+                print('开始计算个人最高倍数任务')
+
+                # 反向遍历 person_ca_jobs，避免删除元素影响索引
+                for i in range(len(person_ca_jobs) - 1, -1, -1):
+                    job_data = person_ca_jobs[i]
+                    
+                    job_ca = job_data[0]  # 任务中的合约地址
+                    job_price = float(job_data[1])  # 任务中的价格
+
+                    # 遍历 Redis 中的 person_ca 数据
+                    person_ca_length = r.llen(REDIS_KEY)
+                    print(person_ca_length)
+                    for j in range(person_ca_length):
+                        # 获取 person_ca 中的数据
+                        person_data = r.lindex(REDIS_KEY, j)
+                        # 如果 person_data 是字节类型，解码为字符串
+                        if isinstance(person_data, bytes):
+                            person_data = person_data.decode()
+                        # 将字符串拆分为列表
+                        person_data = person_data.split(',')
+                        print(person_data)
+                        person_ca = person_data[3]  # person_ca 中的合约地址
+                        person_circulatingSupply = float(person_data[-3])  # person_ca 中的流通量
+
+                        # 如果任务中的合约地址与 person_ca 中的合约地址匹配
+                        if job_ca == person_ca:
+                            now_cap = job_price * person_circulatingSupply  # 计算当前市值
+                            max_cap = float(person_data[5])  # 获取历史最高市值
+                            print(now_cap)
+                            print(max_cap)
+                            # 如果当前市值大于历史最高市值
+                            if now_cap > max_cap:
+                                # 更新历史最高市值
+                                person_data[5] = str(now_cap)
+                                # 将更新后的数据重新存储到 Redis
+                                r.lset(REDIS_KEY, j, ','.join(person_data))
+                                print('---------------------------')
+                                print('{}喊单的{}已创新高{}'.format(person_data[1], person_data[3], now_cap))
+
+                    # 删除已处理的任务
+                    del person_ca_jobs[i]
+
+            # 休眠一段时间，避免频繁轮询
+            time.sleep(1)
+        except Exception as e:
+            print(f"计算个人最高倍数任务出错: {e}")
+
+
+
+""" #定时计算个人ca最高倍数的任务
+def person_ca_max():
+    while not stop_event.is_set():
+        try:
+            if len(person_ca_jobs) > 0:
+                
+                # 反向遍历 sol_ca_jobs避免删除元素影响索引
+                for i in range(len(person_ca_jobs) - 1, -1, -1):
+                    print('开始计算个人最高倍数任务') 
+                    print(person_ca)
+                    for j in range(len(person_ca)):
+                        if person_ca_jobs[i][0] ==  person_ca[j][3]:
+                            now_cap = float(person_ca_jobs[i][1])*float(person_ca[j][-3])
+                            print(now_cap)
+                            print(person_ca[j][5])
+                            # 币价产生了新高
+                            if now_cap > person_ca[j][5]:
+                                person_ca[j][5] = now_cap
+                                print('---------------------------')
+                                print('{}喊单的{}已创新高{}'.format(person_ca[j][1],person_ca[j][3],person_ca[j][5]))
+                    del person_ca_jobs[i]           
+                        
+                           
+
+#person_ca.append([wxId, caller_simulate_name, data['chainId'], data['ca'], data['circulatingSupply']*data['price'], data['circulatingSupply']*data['price'], data['circulatingSupply'], data['price'], data["find_time"]])
+        
+        except Exception as e:
+            logger.error(f"主循环发生错误: {str(e)}", exc_info=True)
+            continue """
+
 
 #根据 input_data 的顺序，重新排列 response_data['data']
 def sort_response_by_input(input_data, response_data):
@@ -702,6 +882,7 @@ def start_top_update():
 
                             # 获取最新价格
                             price = float(price_data['price'])
+                            person_ca_jobs.append([ca_ca, price])
                             newCap = price * data1['circulatingSupply'] if price else (data1['topCap'] / 1.15)
 
                             # 检查是否创新高
@@ -1005,6 +1186,10 @@ def start_all_tasks():
     top_update_thread = threading.Thread(target=start_top_update)
     top_update_thread.start()
 
+    # 启动个人ca最高倍数更新线程
+    person_ca_max_thread = threading.Thread(target=person_ca_max)
+    person_ca_max_thread.start()
+
 
 
     # 等待线程结束（如果需要的话）
@@ -1018,6 +1203,7 @@ def start_all_tasks():
         sol_job_thread.join()
         eths_job_thread.join()
         recover_message_thread.join()
+        person_ca_max_thread.join()
         print("已停止所有任务")
 
 
@@ -1042,6 +1228,9 @@ stop_event = threading.Event()  # 控制线程停止的事件
 all_rankings = {}
 sol_ca_jobs = []
 eths_ca_jobs = []
+person_ca_jobs = []
+
+REDIS_KEY = "person_ca_list"
 
 wcf = Wcf()
 old_news = []
