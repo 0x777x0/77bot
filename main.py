@@ -112,20 +112,23 @@ def getMyLastestGroupMsgID(keyword) -> dict:
 
 
 # 将微信id和昵称以字典的形式存到redis中
-def add_wxid_nickname_to_redis(key, field, value):
+def add_wxid_nickname_to_redis_batch(key, data):
     """
-    将单个键值对存储到 Redis 的 Hash 中
+    批量将键值对存储到 Redis 的 Hash 中
     :param key: Redis 的 Hash 键名
-    :param field: 字段名（微信 ID)
-    :param value: 字段值（微信昵称）
+    :param data: 字典，包含字段名和字段值
     """
     r = redis.Redis(host='localhost', port=6379, db=0)
-
-    # 如果值是字典，转换为 JSON 字符串
-    if isinstance(value, dict):
-        value = json.dumps(value, ensure_ascii=False)  # 确保支持中文
-    r.hset(key, field, value)
-    print(f"已存储: {field} -> {value}")
+    
+    # 使用 Pipeline 批量操作
+    with r.pipeline() as pipe:
+        for field, value in data.items():
+            # 如果值是字典，转换为 JSON 字符串
+            if isinstance(value, dict):
+                value = json.dumps(value, ensure_ascii=False)
+            pipe.hset(key, field, value)
+        pipe.execute()  # 批量执行
+    print(f"已批量存储 {len(data)} 条数据到 Redis")
 
 
 
@@ -368,34 +371,21 @@ def generate_info_message(data, data_save, data1, data2, is_first_time, time_ms)
         #data3 = wcf.get_info_by_wxid(wxId)
         #caller_gender = data3['gender'] if data3['gender'] else '未知'
         # 从监听服务器拿取群成员信息，wxid和昵称
+        # 在业务逻辑中使用批量存储
         results = get_wx_info_v2(data['roomid'])
         member_dict = results['chatroomMembers']
-        # 从redis中拿取wxid和昵称数据
         all_member_dict = get_wxid_nickname_from_redis(REDIS_WX_KEY)
-        print('~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~')
-        print(member_dict)
-        print(all_member_dict)
-        # 两个列表都无数据，空
+
         if not all_member_dict and not member_dict:
             caller_simulate_name = '数据暂时异常'
-        # redis中无数据，member列表有数据
         elif not all_member_dict and member_dict:
-            for key,value in member_dict.items():
-                add_wxid_nickname_to_redis(key = REDIS_WX_KEY,field = key,value = value)
-            if wxId in  member_dict:
-                caller_simulate_name = member_dict[wxId]
-            else:
-                caller_simulate_name = '数据暂时异常'
-        # 两个列表中都有数据
+            add_wxid_nickname_to_redis_batch(key=REDIS_WX_KEY, data=member_dict)
+            caller_simulate_name = member_dict.get(wxId, '数据暂时异常')
         elif all_member_dict and member_dict:
-            for key,value in member_dict.items():
-                add_wxid_nickname_to_redis(key = REDIS_WX_KEY,field = key,value = value)
-            if wxId in member_dict :
-                caller_simulate_name = member_dict[wxId]
-            elif wxId not in member_dict and wxId in all_member_dict:
-                caller_simulate_name = all_member_dict[wxId]
-            else:
-                caller_simulate_name = '数据暂时异常'
+            # 合并 member_dict 和 all_member_dict
+            merged_dict = {**all_member_dict, **member_dict}
+            add_wxid_nickname_to_redis_batch(key=REDIS_WX_KEY, data=member_dict)
+            caller_simulate_name = merged_dict.get(wxId, '数据暂时异常')
 
             
         """ for i in range(len(caller_list)):
