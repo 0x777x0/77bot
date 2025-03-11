@@ -10,9 +10,7 @@ import json
 import logging
 
 
-""" wcf = Wcf()
-groups = ["58224083481@chatroom"]
-wcf.enable_receiving_msg() """
+
 # 配置日志
 logging.basicConfig(
     level=logging.DEBUG,  # 设置日志级别为 DEBUG
@@ -26,7 +24,7 @@ logging.basicConfig(
 # 获取日志记录器
 logger = logging.getLogger("api_request_logger")
 
-print('机器人启动')
+
 
 
 def add_wx_info(roomid, wxId, wxNick, address, times, max_retries=3, retry_delay=0.5):
@@ -261,9 +259,15 @@ def get_wx_info_v2(roomid, max_retries=3, retry_delay=0.5):
     return []
 
 
-""" ca_datas = [] 
+wcf = Wcf()
+groups = ["58224083481@chatroom"]
+wcf.enable_receiving_msg() 
+print('机器人启动')
+
+ca_datas = [] 
+
 while wcf.is_receiving_msg():
-        # print('启动了吗？？？？')
+        #print('启动了吗？？？？')
         try: 
             msg = wcf.get_msg()
             # 处理消息的逻辑...
@@ -277,22 +281,27 @@ while wcf.is_receiving_msg():
                 if sol_id or eths_id:
                     roomid = msg.roomid
                     caller_wxid = msg.sender      
+                    print(1)
                     chatroom_members = wcf.get_chatroom_members(roomid = roomid)
+                    print(chatroom_members)
                     caller_simulate_name = chatroom_members[caller_wxid]
+                    print(3)
                     ca = sol_ca if sol_ca else eths_ca
                     query_time = int(time.time()*1000)
                     
-                    ca_data = [msg.roomid, caller_wxid, caller_simulate_name, ca, query_time]
+                    ca_data = [msg.roomid, chatroom_members, query_time]
                     ca_datas.append(ca_data) 
                     print(ca_datas)   
-                    add_wx_info(roomid,caller_wxid,caller_simulate_name,ca,query_time)
-                    
+                    add_wx_info_v2(roomid,chatroom_members,query_time)
+                    time.sleep(10)
+                    data = get_wx_info_v2(roomid==roomid)
+                    print(data)
         except Empty:
             continue
         except Exception as e:
-            print(e) """
+            print(e) 
 
 
 # add_wx_info("111","123","xx","ca",time.time()*1000)
 # get_wx_info("111","ca")
-#wcf.keep_running()   
+wcf.keep_running()   

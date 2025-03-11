@@ -4,14 +4,14 @@ from queue import Empty
 from ca.ca_info import is_solca, is_eths, math_price, math_cex_price, math_cex_priceChangePercent, math_km, math_percent, math_bjtime, get_bundles, is_cexToken, is_pump
 from command.command import command_id
 from httpsss.oke import fetch_oke_latest_info, fetch_oke_overview_info
-from httpsss.onchain import get_price_onchain
+from httpsss.onchain import get_price_onchain, send_person_ca
 from common.socialMedia_info import is_x, is_web, is_TG
 from common.translate import translate
 from datetime import datetime, timedelta, timezone
 from common.bjTime import convert_timestamp_to_beijing_time
 from ca.exchange import get_exchange_price
 # from common.cache import redis
-from save_data import get_wx_info
+from save_data import get_wx_info, get_wx_info_v2, add_wx_info_v2
 
 import configparser
 import threading
@@ -110,6 +110,35 @@ def getMyLastestGroupMsgID(keyword) -> dict:
     return msgs[0].get("MsgSvrID") if msgs else 0
 
 
+
+# 将微信id和昵称以字典的形式存到redis中
+def add_wxid_nickname_to_redis(key, field, value):
+    """
+    将单个键值对存储到 Redis 的 Hash 中
+    :param key: Redis 的 Hash 键名
+    :param field: 字段名（微信 ID)
+    :param value: 字段值（微信昵称）
+    """
+    r = redis.Redis(host='localhost', port=6379, db=0)
+    r.hset(key, field, value)
+    print(f"已存储: {field} -> {value}")
+
+
+
+# 将微信id和昵称的字典从redis中取出来
+def get_wxid_nickname_from_redis(key):
+    """
+    从 Redis 的 Hash 中获取整个字典
+    :param key: Redis 的 Hash 键名
+    :return: 字典（微信 ID -> 微信昵称）
+    """
+    r = redis.Redis(host='localhost', port=6379, db=0)
+    wechat_dict = r.hgetall(key)
+    # 将字节字符串解码为普通字符串
+    wechat_dict = {k.decode('utf-8'): v.decode('utf-8') for k, v in wechat_dict.items()}
+    return wechat_dict
+
+
 # 撤回消息和清空排行榜、合约数据的方法
 def recover_message():
     global all_rankings
@@ -185,7 +214,7 @@ def get_pool_create_time(chainId,address):
 
 
 #获取并处理合约信息
-def fetch_and_process_data(roomid, chainId, ca, data1, data2, time_ms):
+def fetch_and_process_data(roomid, wxId, chainId, ca, data1, data2, time_ms):
     
     try:
             
@@ -284,6 +313,7 @@ def fetch_and_process_data(roomid, chainId, ca, data1, data2, time_ms):
             return {
                 "ca": ca,
                 "roomid": roomid,
+                'wxId': wxId,
                 "chainId": chainId,
                 "tokenSymbol": tokenSymbol,
                 "tokenName": tokenName,
@@ -329,11 +359,38 @@ def generate_info_message(data, data_save, data1, data2, is_first_time, time_ms)
         
         #跨账号拿取wxid
         caller_simulate_name = None
-        caller_gender = None
-        wxId = None
-        caller_list = get_wx_info(data['roomid'],data['ca'])
+        wxId = data["wxId"]
+        data3 = wcf.get_info_by_wxid(wxId)
+        caller_gender = data3['gender'] if data3['gender'] else '未知'
+        # 从监听服务器拿取群成员信息，wxid和昵称
+        member_dict = get_wx_info_v2(data['roomid'])
+        # 从redis中拿取wxid和昵称数据
+        all_member_dict = get_wxid_nickname_from_redis(REDIS_WX_KEY)
+        
+        # 两个列表都无数据，空
+        if not all_member_dict and not member_dict:
+            caller_simulate_name = '数据暂时异常'
+        # redis中无数据，member列表有数据
+        elif not all_member_dict and member_dict:
+            for key,value in member_dict.items():
+                add_wxid_nickname_to_redis(key = REDIS_WX_KEY,field = key,value = value)
+            if wxId in  member_dict:
+                caller_simulate_name = member_dict['wxId']
+            else:
+                caller_simulate_name = '数据暂时异常'
+        # 两个列表中都有数据
+        elif all_member_dict and member_dict:
+            for key,value in member_dict.items():
+                add_wxid_nickname_to_redis(key = REDIS_WX_KEY,field = key,value = value)
+            if member_dict['wxId'] :
+                caller_simulate_name = member_dict['wxId']
+            elif not member_dict['wxId'] and all_member_dict['wxId']:
+                caller_simulate_name = all_member_dict['wxId']
+            else:
+                caller_simulate_name = '数据暂时异常'
+
             
-        for i in range(len(caller_list)):
+        """ for i in range(len(caller_list)):
             diff = abs(caller_list[i]['times']- time_ms )
             diff_seconds = diff/1000.0
             if diff_seconds <= 8 :
@@ -345,7 +402,7 @@ def generate_info_message(data, data_save, data1, data2, is_first_time, time_ms)
                 caller_gender = data3['gender'] if data3['gender'] else '未知'
                 break  
         caller_simulate_name = caller_simulate_name if caller_simulate_name  else '数据暂时异常'
-        wxId = wxId if wxId else '数据暂时异常'
+        wxId = wxId if wxId else '数据暂时异常' """
         
         if is_first_time:
             
@@ -475,6 +532,7 @@ def generate_info_message(data, data_save, data1, data2, is_first_time, time_ms)
         return None, None
 
 
+#存个人ca数据
 def store_person_ca(new_data):
     """
     将 new_data 存储到 Redis 中，确保没有重复数据。
@@ -519,6 +577,40 @@ def store_person_ca(new_data):
         print(f"存储数据时出错: {e}")
 
 
+#取个人ca数据
+def get_person_ca_from_redis():
+    """
+    从 Redis 中获取数据并还原成二维数组。
+
+    返回:
+        list: 二维数组，格式为 [[wxId, caller_simulate_name, chainId, ca, ...], ...]
+    """
+    try:
+        # 检查 Redis 中是否存在该键
+        if r.exists(REDIS_KEY):
+            # 获取 Redis 列表中的所有数据
+            person_ca_list = r.lrange(REDIS_KEY, 0, -1)
+            result = []
+
+            # 遍历列表中的每条数据
+            for item in person_ca_list:
+                # 如果 item 是字节类型，解码为字符串
+                if isinstance(item, bytes):
+                    item = item.decode()
+                # 将字符串按逗号分割成列表
+                item_data = item.split(',')
+                # 将列表添加到结果中
+                result.append(item_data)
+
+            return result
+        else:
+            print("Redis 中不存在该键。")
+            return []  # 返回空列表
+    except Exception as e:
+        print(f"从 Redis 获取数据时出错: {e}")
+        return []  # 返回空列表
+
+
 
 #sol合约的任务
 def sol_ca_job():
@@ -531,13 +623,14 @@ def sol_ca_job():
                 for i in range(len(sol_ca_jobs) - 1, -1, -1):
                     time.sleep(0.2)
                     roomid = sol_ca_jobs[i][0].roomid
+                    wxId = sol_ca_jobs[i][0].sender
                     ca = sol_ca_jobs[i][1]
                     time_ms = sol_ca_jobs[i][2]
                     # 获取并处理信息
                     data1 = fetch_oke_latest_info(chainId=501, ca_ca = ca)
                     data2 = fetch_oke_overview_info(chainId=501, ca_ca = ca)
                     if data1 and data2 :
-                        data =  fetch_and_process_data(roomid=roomid,chainId=501, ca=ca, data1=data1, data2=data2, time_ms=time_ms)
+                        data =  fetch_and_process_data(roomid=roomid, wxid=wxId, chainId=501, ca=ca, data1=data1, data2=data2, time_ms=time_ms)
                         if not data:
                             del sol_ca_jobs[i]
                             continue
@@ -749,7 +842,9 @@ def send_leaderboard_periodically(send_interval_hours:int):
                         time.sleep(1)  # 每次发送间隔2秒
                 last_send_time = current_time  # 更新上一次发送时间
                 print(f"已发送排行榜信息，当前时间: {current_time}，发送间隔: {send_interval_hours}小时")
-        
+                result = get_person_ca_from_redis()
+                send_person_ca(payload=result)
+
         time.sleep(1)  # 每秒检查一次时间
 
 
@@ -965,7 +1060,8 @@ def start_wcf_listener():
                                
                 # wcf.send_text(info,msg.roomid)  
                 time.sleep(0.2)
-
+                wxid = msg.sender
+                print(wxid)
                 #old_news.append([old_news_id,timestamp_ms])          
                 print(msg.roomid)       
                 
@@ -1192,8 +1288,8 @@ def start_all_tasks():
     top_update_thread.start()
 
     # 启动个人ca最高倍数更新线程
-    person_ca_max_thread = threading.Thread(target=person_ca_max)
-    person_ca_max_thread.start()
+    #person_ca_max_thread = threading.Thread(target=person_ca_max)
+    #person_ca_max_thread.start()
 
 
 
@@ -1208,7 +1304,7 @@ def start_all_tasks():
         sol_job_thread.join()
         eths_job_thread.join()
         recover_message_thread.join()
-        person_ca_max_thread.join()
+        #person_ca_max_thread.join()
         print("已停止所有任务")
 
 
@@ -1236,6 +1332,7 @@ eths_ca_jobs = []
 person_ca_jobs = []
 
 REDIS_KEY = "person_ca_list"
+REDIS_WX_KEY = 'wxid_nickname_dict'
 
 wcf = Wcf()
 old_news = []
@@ -1246,11 +1343,4 @@ r = redis.StrictRedis(host='localhost', port=6379, db=0, decode_responses=True)
 groups = ["58224083481@chatroom",'52173635194@chatroom']
 
 
-
 start_all_tasks()
-
-""" T = is_pump('FiUGrUV1mq2pyGjxMK3jpRed5CsuqX1QPzqZJpvJpump')
-L = is_pump('XgJcy1kER1tLgM4mskd7UG3feJvTqtdDSkV3EXxpump')
-
-print(T)
-print(L) """
