@@ -155,6 +155,112 @@ def get_wx_info(roomid, ca, max_retries=3, retry_delay=0.5):
     logger.error(f"所有 {max_retries} 次尝试均失败，停止重试。")
     return []
 
+
+def add_wx_info_v2(roomid, chatroomMembers, times, max_retries=3, retry_delay=0.5):
+   
+    url = "http://47.238.165.188:8080/api/wxInfo/addV2"
+    headers = {
+        "Content-Type": "application/json"
+    }
+    data = {
+        "roomId": roomid,
+        "chatroomMembers": chatroomMembers,
+        "times": times
+    }
+
+    for attempt in range(max_retries):
+        try:
+            # 记录调试信息
+            logger.debug(f"开始请求 URL: {url}, 参数: {data}, 尝试次数: {attempt + 1}")
+
+            # 发送 POST 请求
+            start_time = datetime.now()
+            response = requests.post(url, json=data, headers=headers, timeout=7)  # 设置超时时间为 7 秒
+            elapsed_time = (datetime.now() - start_time).total_seconds()
+
+            # 记录请求耗时
+            logger.debug(f"请求完成，耗时: {elapsed_time:.2f} 秒")
+
+            # 检查响应状态码
+            if response.status_code == 200:
+                # 记录成功日志
+                logger.info(f"请求成功，响应数据: {response.json()}")
+                return response.json()
+            else:
+                # 记录警告日志
+                logger.warning(f"请求失败，状态码: {response.status_code}, 响应内容: {response.text}")
+                if attempt < max_retries - 1:  # 如果不是最后一次尝试，则等待后重试
+                    time.sleep(retry_delay)
+                continue
+
+        except requests.exceptions.RequestException as e:
+            # 记录错误日志
+            logger.error(f"请求过程中发生错误: {str(e)}", exc_info=True)
+            if attempt < max_retries - 1:  # 如果不是最后一次尝试，则等待后重试
+                time.sleep(retry_delay)
+            continue
+
+    # 如果所有尝试都失败，记录错误日志并返回 None
+    logger.error(f"所有 {max_retries} 次尝试均失败，停止重试。")
+    return None   
+
+
+
+
+def get_wx_info_v2(roomid, max_retries=3, retry_delay=0.5):
+   
+    url = "http://47.238.165.188:8080/api/wxInfo/getV2"
+    params = {
+        "roomId": roomid
+    }
+
+    for attempt in range(max_retries):
+        try:
+            # 记录调试信息
+            logger.debug(f"开始请求 URL: {url}, 参数: {params}, 尝试次数: {attempt + 1}")
+
+            # 发送 GET 请求
+            start_time = datetime.now()
+            response = requests.get(url, params=params, timeout=7)  # 设置超时时间为 7 秒
+            elapsed_time = (datetime.now() - start_time).total_seconds()
+
+            # 记录请求耗时
+            logger.debug(f"请求完成，耗时: {elapsed_time:.2f} 秒")
+
+            # 检查响应状态码
+            if response.status_code == 200:
+                value = response.text
+                logger.info(f"请求成功，响应数据: {value[:100]}...")  # 仅输出前100个字符，防止过长
+
+                # 如果返回为空，直接返回空列表
+                if not value:
+                    logger.warning("返回数据为空，返回空列表")
+                    return []
+
+                # 将响应内容转换为字典
+                data = json.loads(value)
+                data_list = data.get("data", [])
+                logger.info(f"解析后的数据: {data_list}")
+                return data_list
+            else:
+                # 记录警告日志
+                logger.warning(f"请求失败，状态码: {response.status_code}, 响应内容: {response.text}")
+                if attempt < max_retries - 1:  # 如果不是最后一次尝试，则等待后重试
+                    time.sleep(retry_delay)
+                continue
+
+        except requests.exceptions.RequestException as e:
+            # 记录错误日志
+            logger.error(f"请求过程中发生错误: {str(e)}", exc_info=True)
+            if attempt < max_retries - 1:  # 如果不是最后一次尝试，则等待后重试
+                time.sleep(retry_delay)
+            continue
+
+    # 如果所有尝试都失败，记录错误日志并返回空列表
+    logger.error(f"所有 {max_retries} 次尝试均失败，停止重试。")
+    return []
+
+
 """ ca_datas = [] 
 while wcf.is_receiving_msg():
         # print('启动了吗？？？？')
