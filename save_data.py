@@ -259,12 +259,12 @@ def get_wx_info_v2(roomid, max_retries=3, retry_delay=0.5):
     return []
 
 
-wcf = Wcf()
+""" wcf = Wcf()
 groups = ["58224083481@chatroom"]
 wcf.enable_receiving_msg() 
-print('机器人启动')
+print('机器人启动') """
 
-ca_datas = [] 
+""" ca_datas = [] 
 
 while wcf.is_receiving_msg():
         #print('启动了吗？？？？')
@@ -304,4 +304,4 @@ while wcf.is_receiving_msg():
 
 # add_wx_info("111","123","xx","ca",time.time()*1000)
 # get_wx_info("111","ca")
-wcf.keep_running()   
+wcf.keep_running()   """ 

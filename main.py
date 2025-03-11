@@ -120,6 +120,10 @@ def add_wxid_nickname_to_redis(key, field, value):
     :param value: 字段值（微信昵称）
     """
     r = redis.Redis(host='localhost', port=6379, db=0)
+
+    # 如果值是字典，转换为 JSON 字符串
+    if isinstance(value, dict):
+        value = json.dumps(value, ensure_ascii=False)  # 确保支持中文
     r.hset(key, field, value)
     print(f"已存储: {field} -> {value}")
 
@@ -359,14 +363,18 @@ def generate_info_message(data, data_save, data1, data2, is_first_time, time_ms)
         
         #跨账号拿取wxid
         caller_simulate_name = None
+        caller_gender ='未知'
         wxId = data["wxId"]
-        data3 = wcf.get_info_by_wxid(wxId)
-        caller_gender = data3['gender'] if data3['gender'] else '未知'
+        #data3 = wcf.get_info_by_wxid(wxId)
+        #caller_gender = data3['gender'] if data3['gender'] else '未知'
         # 从监听服务器拿取群成员信息，wxid和昵称
-        member_dict = get_wx_info_v2(data['roomid'])
+        results = get_wx_info_v2(data['roomid'])
+        member_dict = results['chatroomMembers']
         # 从redis中拿取wxid和昵称数据
         all_member_dict = get_wxid_nickname_from_redis(REDIS_WX_KEY)
-        
+        print('~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~')
+        print(member_dict)
+        print(all_member_dict)
         # 两个列表都无数据，空
         if not all_member_dict and not member_dict:
             caller_simulate_name = '数据暂时异常'
@@ -375,17 +383,17 @@ def generate_info_message(data, data_save, data1, data2, is_first_time, time_ms)
             for key,value in member_dict.items():
                 add_wxid_nickname_to_redis(key = REDIS_WX_KEY,field = key,value = value)
             if wxId in  member_dict:
-                caller_simulate_name = member_dict['wxId']
+                caller_simulate_name = member_dict[wxId]
             else:
                 caller_simulate_name = '数据暂时异常'
         # 两个列表中都有数据
         elif all_member_dict and member_dict:
             for key,value in member_dict.items():
                 add_wxid_nickname_to_redis(key = REDIS_WX_KEY,field = key,value = value)
-            if member_dict['wxId'] :
-                caller_simulate_name = member_dict['wxId']
-            elif not member_dict['wxId'] and all_member_dict['wxId']:
-                caller_simulate_name = all_member_dict['wxId']
+            if wxId in member_dict :
+                caller_simulate_name = member_dict[wxId]
+            elif wxId not in member_dict and wxId in all_member_dict:
+                caller_simulate_name = all_member_dict[wxId]
             else:
                 caller_simulate_name = '数据暂时异常'
 
@@ -630,7 +638,7 @@ def sol_ca_job():
                     data1 = fetch_oke_latest_info(chainId=501, ca_ca = ca)
                     data2 = fetch_oke_overview_info(chainId=501, ca_ca = ca)
                     if data1 and data2 :
-                        data =  fetch_and_process_data(roomid=roomid, wxid=wxId, chainId=501, ca=ca, data1=data1, data2=data2, time_ms=time_ms)
+                        data =  fetch_and_process_data(roomid=roomid, wxId=wxId, chainId=501, ca=ca, data1=data1, data2=data2, time_ms=time_ms)
                         if not data:
                             del sol_ca_jobs[i]
                             continue
