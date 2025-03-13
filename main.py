@@ -2,7 +2,7 @@
 from wcferry import Wcf
 from queue import Empty
 from ca.ca_info import is_solca, is_eths, math_price, math_cex_price, math_cex_priceChangePercent, math_km, math_percent, math_bjtime, get_bundles, is_cexToken, is_pump
-from command.command import command_id
+from command.command import command_id, command_cextoken, command_leaderboard_ca, command_person_record
 from httpsss.oke import fetch_oke_latest_info, fetch_oke_overview_info
 from httpsss.onchain import get_price_onchain, send_person_ca
 from common.socialMedia_info import is_x, is_web, is_TG
@@ -10,8 +10,10 @@ from common.translate import translate
 from datetime import datetime, timedelta, timezone
 from common.bjTime import convert_timestamp_to_beijing_time
 from ca.exchange import get_exchange_price
+from ca.redis_method import get_from_redis_list
 # from common.cache import redis
 from save_data import get_wx_info, get_wx_info_v2, add_wx_info_v2
+from wcwidth import wcswidth
 
 import configparser
 import threading
@@ -144,6 +146,54 @@ def get_wxid_nickname_from_redis(key):
     # 将字节字符串解码为普通字符串
     wechat_dict = {k.decode('utf-8'): v.decode('utf-8') for k, v in wechat_dict.items()}
     return wechat_dict
+
+
+def save_to_redis_list(data, list_name='chatroom_data'):
+    """
+    将数据存储到 Redis 列表中
+    :param data: 要存储的数据（字典格式）
+    :param list_name: Redis 列表的名称
+    """
+    # 将字典转换为 JSON 字符串
+   
+    data_json = json.dumps(data, ensure_ascii=False)
+    # 将 JSON 字符串推入 Redis 列表
+    redis_client.lpush(list_name, data_json)
+    print(f"数据已存储到 Redis 列表 {list_name} 中")
+
+
+def save_or_update_to_redis_list(data, list_name='chatroom_data'):
+    """
+    将数据存储到 Redis 列表中，如果 roomId 已存在则覆盖，否则添加到列表
+    :param data: 要存储的数据（字典格式）
+    :param list_name: Redis 列表的名称
+    """
+    # 调用 get_from_redis_list 方法获取 Redis 列表中的数据
+    data_list = get_from_redis_list(list_name)
+    print('进入redis方法')
+    print(data_list)
+    # 检查是否存在 roomId 相同的项
+    found = False
+    if data_list:
+        for index, item in enumerate(data_list):
+            if item.get('roomId') == data.get('roomId'):
+                # 如果找到 roomId 相同的项，覆盖该项
+                print('roomid相同')
+                data_list[index] = data
+                found = True
+                break
+
+    # 如果没有找到 roomId 相同的项，调用 save_to_redis_list 方法将新数据添加到列表
+    if not found:
+        save_to_redis_list(data, list_name)
+    else:
+        # 清空 Redis 列表
+        redis_client.delete(list_name)
+        # 将更新后的列表重新存储到 Redis 中
+        for item in data_list:
+            redis_client.rpush(list_name, json.dumps(item, ensure_ascii=False))
+        print(f"数据已更新到 Redis 列表 {list_name} 中")
+
 
 
 # 撤回消息和清空排行榜、合约数据的方法
@@ -373,19 +423,32 @@ def generate_info_message(data, data_save, data1, data2, is_first_time, time_ms)
         # 从监听服务器拿取群成员信息，wxid和昵称
         # 在业务逻辑中使用批量存储
         results = get_wx_info_v2(data['roomid'])
-        member_dict = results['chatroomMembers']
-        all_member_dict = get_wxid_nickname_from_redis(REDIS_WX_KEY)
+        print('~~~~~~~~~~~~~~~~~~~~~~~')
+        print(results)
+        # 将群组成员信息进行更新或添加
+        if results:
+            save_or_update_to_redis_list(results)
+            
+            member_dict = results['chatroomMembers']
+            all_member_dict = get_wxid_nickname_from_redis(REDIS_WX_KEY)
 
-        if not all_member_dict and not member_dict:
-            caller_simulate_name = '数据暂时异常'
-        elif not all_member_dict and member_dict:
-            add_wxid_nickname_to_redis_batch(key=REDIS_WX_KEY, data=member_dict)
-            caller_simulate_name = member_dict.get(wxId, '数据暂时异常')
-        elif all_member_dict and member_dict:
-            # 合并 member_dict 和 all_member_dict
-            merged_dict = {**all_member_dict, **member_dict}
-            add_wxid_nickname_to_redis_batch(key=REDIS_WX_KEY, data=member_dict)
-            caller_simulate_name = merged_dict.get(wxId, '数据暂时异常')
+            if not all_member_dict and not member_dict:
+                caller_simulate_name = '数据暂时异常'
+            elif not all_member_dict and member_dict:
+                add_wxid_nickname_to_redis_batch(key=REDIS_WX_KEY, data=member_dict)
+                caller_simulate_name = member_dict.get(wxId, '数据暂时异常')
+            elif all_member_dict and member_dict:
+                # 合并 member_dict 和 all_member_dict
+                merged_dict = {**all_member_dict, **member_dict}
+                add_wxid_nickname_to_redis_batch(key=REDIS_WX_KEY, data=member_dict)
+                caller_simulate_name = merged_dict.get(wxId, '数据暂时异常')
+        else:
+            member_dict = None
+            all_member_dict = get_wxid_nickname_from_redis(REDIS_WX_KEY)
+            if not all_member_dict :
+                caller_simulate_name = '数据暂时异常'
+            elif all_member_dict :                   
+                caller_simulate_name = merged_dict.get(wxId, '数据暂时异常')
 
             
         """ for i in range(len(caller_list)):
@@ -441,6 +504,11 @@ def generate_info_message(data, data_save, data1, data2, is_first_time, time_ms)
         else:
             description = translate(data2["data"]['socialMedia']['description']) if data_save["description"] == '暂无叙事' else data_save["description"]
             nowCap = float(data1["data"]["price"]) * float(data1["data"]["circulatingSupply"])
+            #如果发现创新高，则更新最大市值
+            if nowCap > data_save['topCap']:
+                data_save['topCap'] = nowCap
+                store_nested_data_to_redis(data['roomid'],data['ca'], data['tokenSymbol'],caller_simulate_name, caller_gender,data1, description, data['find_time'])
+
             if data_save['caller_name'] == '数据暂时异常':
                 print('哨兵数据异常，重新获取')
                          
@@ -474,7 +542,7 @@ def generate_info_message(data, data_save, data1, data2, is_first_time, time_ms)
         if caller_simulate_name != '数据暂时异常' and wxId!= '数据暂时异常':
             
             # 构造需要存储的列表数据
-            new_data = [
+            new_data = [[
                 wxId,
                 caller_simulate_name,
                 data['chainId'],
@@ -483,9 +551,10 @@ def generate_info_message(data, data_save, data1, data2, is_first_time, time_ms)
                 float(data['circulatingSupply']) * float(data['price']),
                 data['circulatingSupply'],
                 data['price'],
-                data["find_time"]
-            ]
-            store_person_ca(new_data=new_data)
+                data["find_time"],
+                data['tokenSymbol']
+            ]]
+            send_person_ca(payload=new_data)
 
                 
 
@@ -668,13 +737,14 @@ def eths_ca_job():
                 for i in range(len(eths_ca_jobs) - 1, -1, -1):
                     time.sleep(0.2)
                     roomid = eths_ca_jobs[i][0].roomid
+                    wxId = eths_ca_jobs[i][0].sender
                     ca = eths_ca_jobs[i][1]
                     time_ms = eths_ca_jobs[i][2]
                     # 获取并处理信息
                     data1 = fetch_oke_latest_info(chainId=56, ca_ca = ca)
                     data2 = fetch_oke_overview_info(chainId=56, ca_ca = ca)
                     if data1 and data2 :
-                        data =  fetch_and_process_data(roomid=roomid, chainId=56, ca=ca, data1=data1, data2=data2, time_ms=time_ms)
+                        data =  fetch_and_process_data(roomid=roomid, wxId=wxId, chainId=56, ca=ca, data1=data1, data2=data2, time_ms=time_ms)
                         if not data:
                             del eths_ca_jobs[i]
                             continue
@@ -817,7 +887,6 @@ def sort_response_by_input(input_data, response_data):
 
 
 #定时发送排行榜信息。
-
 def send_leaderboard_periodically(send_interval_hours:int):
     """
     独立线程：定时发送排行榜信息。
@@ -980,7 +1049,7 @@ def start_top_update():
 
                             # 获取最新价格
                             price = float(price_data['price'])
-                            person_ca_jobs.append([ca_ca, price])
+                            #person_ca_jobs.append([ca_ca, price])
                             newCap = price * data1['circulatingSupply'] if price else (data1['topCap'] / 1.15)
 
                             # 检查是否创新高
@@ -1047,170 +1116,23 @@ def start_wcf_listener():
             # 处理消息的逻辑...
             time.sleep(0.3)
             # print('222222')
-            """ if msg.content == "滚kkkkkkkkkkk":
+            '''if msg.content == "滚kkkkkkkkkkk":
                 wcf.send_text("好的，小瓜瓜，爱你爱你哦,周末一起玩",msg.sender)
+            '''
+            # 判断是否是id指令，查询打印roomid
+            command_id(msg = msg)
+      
+            # 判断是否是cextoken指令，查询发送交易所代币价格
+            command_cextoken(wcf = wcf, msg= msg, groups= groups)
             
-            if msg.content == "时间1":
-                wcf.send_text("你好，宇哥，现在时间是："+ math_bjtime(),msg.sender) """
-
-            if msg.from_group() and msg.content == "id850" :
+            # 判断是否是ca排行榜指令，查询发送群组排行榜信息
+            command_leaderboard_ca(wcf = wcf, msg= msg, groups= groups)
             
-                               
-                # wcf.send_text(info,msg.roomid)  
-                time.sleep(0.2)
-                wxid = msg.sender
-                print(wxid)
-                #old_news.append([old_news_id,timestamp_ms])          
-                print(msg.roomid)       
-                
-
-            # 获取主流代币价格
-            if msg.from_group() and is_cexToken(msg.content) and msg.content!= '/top' and msg.roomid in groups :
-                
-                token_symble = msg.content[1:]
-                token_price, token_priceChangePercent = get_exchange_price(token_symble)
-                print(type(token_price))
-
-                if float(token_price) > 0 :
-                    token_price = float(token_price)
-                    token_price = math_cex_price(token_price)
-                    token_priceChangePercent = float(token_priceChangePercent)
-                    token_priceChangePercent = math_cex_priceChangePercent(token_priceChangePercent)
-                    print('{}当前的price为:{}'.format(token_symble,token_price)) 
-                    wcf.send_text('{}: {} ({})'.format(token_symble,token_price,token_priceChangePercent),msg.roomid)
+            # 判断是否是个人战绩指令
+            command_person_record(wcf = wcf, msg= msg, groups= groups)
             
-            # 记录用户发言次数（使用昵称）
-            if msg.from_group() and msg.roomid in groups:
-                user_wxid = msg.sender
-
-                # 检查 sender 是否是群 roomid
-                if user_wxid == msg.roomid:
-                    continue  # 跳过群 roomid，不记录
-
-                # 获取用户昵称
-                chatroom_members = wcf.get_chatroom_members(roomid=msg.roomid) or {}
-                user_name = chatroom_members.get(user_wxid, user_wxid)  # 如果没有昵称，使用微信ID
-                
-                # 使用 Redis 记录用户发言次数（以昵称为键）
-                redis_key = f"activity_{msg.roomid}"
-                r.hincrby(redis_key, user_wxid, 1)  # 每次发言增加1 
-
        
-            if msg.from_group() and msg.content.startswith("/活跃") and msg.roomid in groups:
-                # 获取页码（例如 /huo1 会得到页码 1）
-                try:
-                    page_number = int(msg.content[3:])  # 获取页码（从/huo后面的数字提取）
-                except ValueError:
-                    wcf.send_text("请输入正确的页码，例如 /huo1、/huo2 等", msg.roomid)
-                    continue
-
-                # 获取活跃度数据
-                redis_key = f"activity_{msg.roomid}"
-                activity_data = r.hgetall(redis_key)  # 获取活跃度数据
-
-                # 获取群成员昵称映射
-                chatroom_members = wcf.get_chatroom_members(roomid=msg.roomid) or {}
-
-                # 处理活跃度数据：把 wxid 转换为昵称
-                user_activity = [
-                    (chatroom_members.get(user, user), int(count))  # 如果找不到昵称，就显示 wxid
-                    for user, count in activity_data.items()
-                ]
-
-                # 按照发言次数降序排序
-                user_activity.sort(key=lambda x: x[1], reverse=True)
-
-                # 每页显示10条数据
-                items_per_page = 10
-                start_index = (page_number - 1) * items_per_page
-                end_index = start_index + items_per_page
-
-                # 截取当前页面的数据
-                page_data = user_activity[start_index:end_index]
-
-                if not page_data:
-                    wcf.send_text(f"第 {page_number} 页没有数据，请确认页码是否正确", msg.roomid)
-                    continue
-
-                # 生成排行榜信息
-                leaderboard_msg = f"🎉   🏅   🎉   🏅   🎉   🏅   🎉\n"
-                leaderboard_msg += f"🏆🌟     活跃度排行榜     🌟🏆\n"
-                leaderboard_msg += "━ ━ ━ ━ ━ ━ ━ ━ ━ ━ ━\n"
-
-                # 修改：从 start_index + 1 开始，确保排名连续
-                for idx, (user_name, count) in enumerate(page_data, start=start_index + 1):
-                    rank_emoji = {1: "🥇👤", 2: "🥈👤", 3: "🥉👤"}.get(idx, f"{idx}.👤")
-                    leaderboard_msg += f"{rank_emoji} {user_name}  : {count} 次\n"
-                    leaderboard_msg += "━ ━ ━ ━ ━ ━ ━ ━ ━ ━ ━\n"
-
-                leaderboard_msg += "🎉🏅  恭喜活跃群友上榜  🏅🎉\n"
-                leaderboard_msg += "🎉   🏅   🎉   🏅   🎉   🏅   🎉"
-
-                # 发送排行榜
-                wcf.send_text(leaderboard_msg, msg.roomid)
-                print(f"已发送活跃度排行榜第 {page_number} 页到分组 {msg.roomid}:\n{leaderboard_msg}")
-
-
-            # 获取群排行榜数据  
-            if msg.from_group() and msg.content == "/top" and msg.roomid in groups:
-                roomid = msg.roomid
-                leaderboard_data = r.get(f"leaderboard_{roomid}")
-
-                if leaderboard_data:
-                    rankings = json.loads(leaderboard_data)
-                    
-                    # 检查排行榜数据是否为空
-                    if not rankings:
-                        wcf.send_text("暂无排行榜数据，群友快快发金狗", roomid)
-                        print(f"分组 {roomid} 的排行榜数据为空")
-                        return  # 直接返回，避免后续逻辑
-                    
-                    # 只取前 10 名
-                    top_10_rankings = rankings[:10]
-                    
-                    # 排行榜标题
-                    leaderboard_msg = "🎉   🏅   🎉   🏅   🎉   🏅   🎉\n"
-                    leaderboard_msg += "🏆🌟     Top10  排行榜    🌟🏆\n"
-                    leaderboard_msg += "━ ━ ━ ━ ━ ━ ━ ━ ━ ━ ━\n"
-                    
-                    for idx, entry in enumerate(top_10_rankings, start=1):
-                        # 根据性别选择头像
-                        if entry.get('caller_gender') == '女':
-                            avatar = "👩"  # 女性头像
-                        else:
-                            avatar = "👨"  # 男性头像或默认头像
-                        
-                        # 根据排名选择奖牌
-                        if idx == 1:
-                            rank_emoji = "🥇" + avatar  # 第一名
-                        elif idx == 2:
-                            rank_emoji = "🥈" + avatar  # 第二名
-                        elif idx == 3:
-                            rank_emoji = "🥉" + avatar  # 第三名
-                        else:
-                            rank_emoji = f"{idx}." + avatar  # 其他名次
-                        
-                        leaderboard_msg += (
-                            f"{rank_emoji} {entry['caller_name']}\n"
-                            f"   💰  {entry['tokenSymbol']}   🚀 {entry['ratio']:.2f}X\n"
-                            f"━ ━ ━ ━ ━ ━ ━ ━ ━ ━ ━\n"
-                        )
-                    
-                    # 如果数据不足 10 条，添加提示信息
-                    if len(top_10_rankings) < 10:
-                        leaderboard_msg += "\n⚠️ 当前排行榜数据不足 10 条\n"
-                    
-                    # 排行榜底部装饰
-                    leaderboard_msg += "🎉🏅   恭喜老板上榜   🏅🎉\n"
-                    leaderboard_msg += "🎉   🏅   🎉   🏅   🎉   🏅   🎉"
-                    
-                    wcf.send_text(leaderboard_msg, roomid)
-                    print(f"已发送排行榜到分组 {roomid}:\n{leaderboard_msg}")
-                else:
-                    wcf.send_text("暂无排行榜数据，群友快快发金狗", roomid)
-                    print(f"暂无排行榜数据，群友快快发金狗")
-                
-            
+                   
             # 判断消息中是否包含ca信息
             #timestamp_1 = int(time.time() * 1000)
             sol_id, sol_ca = is_solca(msg.content)
@@ -1294,7 +1216,7 @@ def start_all_tasks():
     # 等待线程结束（如果需要的话）
     try:
         while True:
-            time.sleep(60)  # 每分钟检查一次
+            time.sleep(30)  # 每分钟检查一次
     except KeyboardInterrupt:
         stop_event.set()
         wcf_listener_thread.join()
@@ -1336,6 +1258,7 @@ wcf = Wcf()
 old_news = []
 
 r = redis.StrictRedis(host='localhost', port=6379, db=0, decode_responses=True)
+redis_client = redis.Redis(host='localhost', port=6379, db=0)
 
 # '53951514521@chatroom'
 groups = ["58224083481@chatroom",'52173635194@chatroom']

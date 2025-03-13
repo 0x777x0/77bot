@@ -3,14 +3,20 @@ import requests
 import time
 from datetime import datetime
 import json
+import sys
+import io
+
+
+# 修改标准输出的编码为 utf-8
+sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding='utf-8')
 
 # 配置日志
 logging.basicConfig(
     level=logging.DEBUG,  # 设置日志级别为 DEBUG
     format="%(asctime)s - %(levelname)s - %(message)s",  # 日志格式
     handlers=[
-        logging.FileHandler("api_request.log"),  # 输出到文件
-        logging.StreamHandler()  # 输出到控制台
+        logging.FileHandler("api_request.log", encoding='utf-8'),  # 输出到文件，并设置编码为 utf-8
+        logging.StreamHandler(sys.stdout)  # 输出到控制台
     ]
 )
 
