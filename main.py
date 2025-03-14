@@ -13,12 +13,9 @@ from ca.exchange import get_exchange_price
 from ca.redis_method import get_from_redis_list
 # from common.cache import redis
 from save_data import get_wx_info, get_wx_info_v2, add_wx_info_v2
-from wcwidth import wcswidth
 
 import configparser
 import threading
-import functools
-import re
 import requests
 import time
 import json
@@ -26,36 +23,6 @@ import redis
 import random
 import string
 import logging
-
-
-
-
-
-
-# 配置日志
-logging.basicConfig(
-    level=logging.DEBUG,  # 设置日志级别为 DEBUG
-    format="%(asctime)s - %(levelname)s - %(message)s",  # 日志格式
-    handlers=[
-        logging.FileHandler("sol_ca_job.log"),  # 输出到文件
-        logging.StreamHandler()  # 输出到控制台
-    ]
-)
-
-logging.basicConfig(
-    level=logging.INFO,  # 设置日志级别为 INFO
-    format="%(asctime)s - %(levelname)s - %(message)s",  # 日志格式
-    handlers=[
-        logging.FileHandler("top_update.log"),  # 输出到文件
-        logging.StreamHandler()  # 输出到控制台
-    ]
-)
-
-# 获取日志记录器
-logger = logging.getLogger("sol_ca_job_logger")
-
-logger = logging.getLogger("top_update_logger")
-
 
 
 
@@ -174,8 +141,9 @@ def save_or_update_to_redis_list(data, list_name='chatroom_data'):
     print(data_list)
     # 检查是否存在 roomId 相同的项
     found = False
-    if data_list:
-        for index, item in enumerate(data_list):
+    
+    if data_list :
+        for index, item in enumerate(data_list):          
             if item.get('roomId') == data.get('roomId'):
                 # 如果找到 roomId 相同的项，覆盖该项
                 print('roomid相同')
@@ -405,6 +373,7 @@ def generate_info_message(data, data_save, data1, data2, is_first_time, time_ms)
     """
     try:
         find_time = data["find_time"]
+        print('1122222222')
 
         timestamp_seconds = find_time / 1000
         # 转换为 UTC 时间
@@ -418,17 +387,18 @@ def generate_info_message(data, data_save, data1, data2, is_first_time, time_ms)
         caller_simulate_name = None
         caller_gender ='未知'
         wxId = data["wxId"]
-        #data3 = wcf.get_info_by_wxid(wxId)
-        #caller_gender = data3['gender'] if data3['gender'] else '未知'
+        
         # 从监听服务器拿取群成员信息，wxid和昵称
         # 在业务逻辑中使用批量存储
+        print('1122222222')
         results = get_wx_info_v2(data['roomid'])
         print('~~~~~~~~~~~~~~~~~~~~~~~')
         print(results)
         # 将群组成员信息进行更新或添加
-        if results:
+        if results != '{}' :
+            print('为空为什么还进来')
             save_or_update_to_redis_list(results)
-            
+             
             member_dict = results['chatroomMembers']
             all_member_dict = get_wxid_nickname_from_redis(REDIS_WX_KEY)
 
@@ -901,14 +871,14 @@ def send_leaderboard_periodically(send_interval_hours:int):
         # 检查是否到达整点
         if current_time.minute == 0 and current_time.second == 0:
             # 检查是否满足时间间隔
-            if last_send_time is None or (current_time - last_send_time).total_seconds() >= send_interval_hours * 3600:
+            if last_send_time is None or (current_time - last_send_time).total_seconds() >= 4 * 3600:
                 for roomid in groups:
                     rankings = all_rankings.get(roomid, [])
                     if rankings:
                         send_leaderboard_to_group(roomid, rankings)
                         time.sleep(1)  # 每次发送间隔2秒
                 last_send_time = current_time  # 更新上一次发送时间
-                print(f"已发送排行榜信息，当前时间: {current_time}，发送间隔: {send_interval_hours}小时")
+                print(f"已发送排行榜信息，当前时间: {current_time}，发送间隔: {4}小时")
                 result = get_person_ca_from_redis()
                 send_person_ca(payload=result)
 
@@ -1137,7 +1107,7 @@ def start_wcf_listener():
             #timestamp_1 = int(time.time() * 1000)
             sol_id, sol_ca = is_solca(msg.content)
             eths_id, eths_ca = is_eths(msg.content)
-            # print('zoudaozheli')
+           
             # 判断ca属于哪条链
             if sol_id :
                 chain_id = sol_id
@@ -1207,10 +1177,6 @@ def start_all_tasks():
     top_update_thread = threading.Thread(target=start_top_update)
     top_update_thread.start()
 
-    # 启动个人ca最高倍数更新线程
-    #person_ca_max_thread = threading.Thread(target=person_ca_max)
-    #person_ca_max_thread.start()
-
 
 
     # 等待线程结束（如果需要的话）
@@ -1224,8 +1190,27 @@ def start_all_tasks():
         sol_job_thread.join()
         eths_job_thread.join()
         recover_message_thread.join()
-        #person_ca_max_thread.join()
+        send_leaderboard_periodically_thread.join()
+        
         print("已停止所有任务")
+
+
+# 配置日志
+logging.basicConfig(
+    level=logging.DEBUG,  # 设置日志级别为 DEBUG
+    format="%(asctime)s - %(levelname)s - %(message)s",  # 日志格式
+    handlers=[
+        logging.FileHandler("sol_ca_job.log"),  # 输出到文件
+        logging.StreamHandler()  # 输出到控制台
+    ]
+)
+
+
+# 获取日志记录器
+logger = logging.getLogger("sol_ca_job_logger")
+
+logger = logging.getLogger("top_update_logger")
+
 
 
 
@@ -1242,20 +1227,18 @@ except Exception as e:
 print(f"撤回时间间隔配置: {REVOKE_INTERVAL_MS} ms")
 
 
-
-
-#timestamp_1 = 0
 stop_event = threading.Event()  # 控制线程停止的事件
 all_rankings = {}
 sol_ca_jobs = []
 eths_ca_jobs = []
 person_ca_jobs = []
+old_news = []
+
 
 REDIS_KEY = "person_ca_list"
 REDIS_WX_KEY = 'wxid_nickname_dict'
 
 wcf = Wcf()
-old_news = []
 
 r = redis.StrictRedis(host='localhost', port=6379, db=0, decode_responses=True)
 redis_client = redis.Redis(host='localhost', port=6379, db=0)
@@ -1263,5 +1246,5 @@ redis_client = redis.Redis(host='localhost', port=6379, db=0)
 # '53951514521@chatroom'
 groups = ["58224083481@chatroom",'52173635194@chatroom']
 
-
+print(12311111111111111111)
 start_all_tasks()

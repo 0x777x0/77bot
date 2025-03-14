@@ -154,9 +154,9 @@ def command_person_record(wcf, msg, groups):
     if msg.from_group() and msg.roomid in groups:
         text = msg.content
 
-        if text.startswith('/战绩@'):
+        if text.startswith('战绩'):
             # 使用 split 方法分割文本，取 @ 之后的部分
-            content = text.split('@', 1)[1].strip()  # 去除空白字符
+            content = text.split('绩', 1)[1].strip()  # 去除空白字符
             print(f"content: {content}, type: {type(content)}, length: {len(content)}")
             roomid = msg.roomid
             chatrooms_member = get_from_redis_list()
