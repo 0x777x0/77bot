@@ -147,8 +147,6 @@ def format_leaderboard_entry(prefix, token_symbol, multiple, address, init_value
     return formatted_text
 
 
-
-
 def command_person_record(wcf, msg, groups):
     
     if msg.from_group() and msg.roomid in groups:
@@ -204,6 +202,7 @@ def command_person_record(wcf, msg, groups):
                             def generate_leaderboard(data):
                                 leaderboard_text = "🏅        🎉        🏅        🎉        🏅\n"
                                 leaderboard_text += data[0]['wxNick'] + " 个人战绩\n"
+                                leaderboard_text +=  "\n"
                                 leaderboard_text += "━    ━    ━    ━    ━    ━    ━\n"
 
                                 if len(data) == 0:

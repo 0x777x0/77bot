@@ -175,7 +175,7 @@ def recover_message():
         time.sleep(10)
         print('开始撤回消息')
         try:
-            if len(old_news) > 0:
+            """ if len(old_news) > 0:
                 print(old_news)
                 # 反向遍历 old_news，避免删除元素影响索引
                 for i in range(len(old_news) - 1, -1, -1):
@@ -185,7 +185,7 @@ def recover_message():
                         result = wcf.revoke_msg(old_news[i][0]) 
                         print('撤回消息{}'.format(result))
                         if result == 1:
-                            del old_news[i]  # 删除已撤回的消息
+                            del old_news[i]  # 删除已撤回的消息 """
             
             # 检查是否需要清空排行榜数据
             current_time = datetime.now()
@@ -391,7 +391,7 @@ def generate_info_message(data, data_save, data1, data2, is_first_time, time_ms)
         # 从监听服务器拿取群成员信息，wxid和昵称
         # 在业务逻辑中使用批量存储
         print('1122222222')
-        results = get_wx_info_v2(data['roomid'])
+        """ results = get_wx_info_v2(data['roomid'])
         print('~~~~~~~~~~~~~~~~~~~~~~~')
         print(results)
         # 将群组成员信息进行更新或添加
@@ -418,10 +418,37 @@ def generate_info_message(data, data_save, data1, data2, is_first_time, time_ms)
             if not all_member_dict :
                 caller_simulate_name = '数据暂时异常'
             elif all_member_dict :                   
-                caller_simulate_name = merged_dict.get(wxId, '数据暂时异常')
+                caller_simulate_name = merged_dict.get(wxId, '数据暂时异常') """
+        
+        chatroom_members = wcf.get_chatroom_members(roomid = data['roomid'])
+        if chatroom_members :
+            print('为空为什么还进来')
+            results = {'roomId':data['roomid'],'chatroomMembers':chatroom_members, 'times': 1742172354786}
+            save_or_update_to_redis_list(results)
+             
+            member_dict = chatroom_members
+            all_member_dict = get_wxid_nickname_from_redis(REDIS_WX_KEY)
 
-            
-        """ for i in range(len(caller_list)):
+            if not all_member_dict and not member_dict:
+                caller_simulate_name = '数据暂时异常'
+            elif not all_member_dict and member_dict:
+                add_wxid_nickname_to_redis_batch(key=REDIS_WX_KEY, data=member_dict)
+                caller_simulate_name = member_dict.get(wxId, '数据暂时异常')
+            elif all_member_dict and member_dict:
+                # 合并 member_dict 和 all_member_dict
+                merged_dict = {**all_member_dict, **member_dict}
+                add_wxid_nickname_to_redis_batch(key=REDIS_WX_KEY, data=member_dict)
+                caller_simulate_name = merged_dict.get(wxId, '数据暂时异常')
+        else:
+            member_dict = None
+            all_member_dict = get_wxid_nickname_from_redis(REDIS_WX_KEY)
+            if not all_member_dict :
+                caller_simulate_name = '数据暂时异常'
+            elif all_member_dict :                   
+                caller_simulate_name = merged_dict.get(wxId, '数据暂时异常') 
+        
+             
+            """ for i in range(len(caller_list)):
             diff = abs(caller_list[i]['times']- time_ms )
             diff_seconds = diff/1000.0
             if diff_seconds <= 8 :
@@ -433,7 +460,8 @@ def generate_info_message(data, data_save, data1, data2, is_first_time, time_ms)
                 caller_gender = data3['gender'] if data3['gender'] else '未知'
                 break  
         caller_simulate_name = caller_simulate_name if caller_simulate_name  else '数据暂时异常'
-        wxId = wxId if wxId else '数据暂时异常' """
+        wxId = wxId if wxId else '数据暂时异常' """ 
+        
         
         if is_first_time:
             
