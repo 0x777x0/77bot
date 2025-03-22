@@ -33,10 +33,10 @@ import logging
                 print(msg.roomid)  """
 
 
-def command_id(msg):
+def command_id(wcf, msg):
 
     if msg.from_group and msg.content == "id850" :
-        # wcf.send_text(msg.roomid,msg.roomid)   
+        wcf.send_text(msg.roomid,msg.roomid)   
         time.sleep(0.2)             
         print(msg.roomid) 
     

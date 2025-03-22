@@ -499,19 +499,55 @@ def generate_info_message(data, data_save, data1, data2, is_first_time, time_ms)
             print('总耗时{}'.format(hs)) """
 
             store_nested_data_to_redis(data['roomid'],data['ca'], data['tokenSymbol'],caller_simulate_name, caller_gender,data1, description, data['find_time'])
+        
         else:
             description = translate(data2["data"]['socialMedia']['description']) if data_save["description"] == '暂无叙事' else data_save["description"]
             nowCap = float(data1["data"]["price"]) * float(data1["data"]["circulatingSupply"])
             #如果发现创新高，则更新最大市值
             if nowCap > data_save['topCap']:
                 data_save['topCap'] = nowCap
-                store_nested_data_to_redis(data['roomid'],data['ca'], data['tokenSymbol'],caller_simulate_name, caller_gender,data1, description, data['find_time'])
+                data2 = {
+                    'data':{
+                        'price':data_save['price'],
+                        'initCap': data_save['initCap'] , 
+                        'topCap': data_save['topCap'] , 
+                        'circulatingSupply':data_save['circulatingSupply']   
+                    }
+                }
+                store_nested_data_to_redis(
+                    data['roomid'],
+                    data['ca'], 
+                    data['tokenSymbol'],
+                    data_save['caller_name'], 
+                    data_save['caller_gender'],
+                    data2, 
+                    description, 
+                    data_save['find_time']
+                )
 
             if data_save['caller_name'] == '数据暂时异常':
                 print('哨兵数据异常，重新获取')
                          
                 if caller_simulate_name != '数据暂时异常':
-                    store_nested_data_to_redis(data['roomid'],data['ca'], data['tokenSymbol'],caller_simulate_name, caller_gender,data1, description, data['find_time'])
+                    data2 = {
+                    'data':{
+                        'price':data_save['price'],
+                        'initCap': data_save['initCap'] , 
+                        'topCap': data_save['topCap'] , 
+                        'circulatingSupply':data_save['circulatingSupply']   
+                    }
+                }
+                    store_nested_data_to_redis(
+                        data['roomid'],
+                        data['ca'],
+                        data['tokenSymbol'],
+                        data_save['caller_name'], 
+                        data_save['caller_gender'],
+                        data2, 
+                        description, 
+                        data_save['find_time']
+                    )
+                    
                     data_save = get_nested_data_from_redis(roomid=data['roomid'], ca_ca=data['ca'])
             
             random_string = ''.join(random.choices(string.ascii_letters + string.digits, k=14))
@@ -683,7 +719,7 @@ def sol_ca_job():
     while not stop_event.is_set():
         try:
             if len(sol_ca_jobs) > 0:
-                print('开始sol任务') 
+                logger.info('开始sol任务')
                 # 反向遍历 sol_ca_jobs，避免删除元素影响索引
                 for i in range(len(sol_ca_jobs) - 1, -1, -1):
                     time.sleep(0.2)
@@ -823,37 +859,6 @@ def person_ca_max():
         except Exception as e:
             print(f"计算个人最高倍数任务出错: {e}")
 
-
-
-""" #定时计算个人ca最高倍数的任务
-def person_ca_max():
-    while not stop_event.is_set():
-        try:
-            if len(person_ca_jobs) > 0:
-                
-                # 反向遍历 sol_ca_jobs避免删除元素影响索引
-                for i in range(len(person_ca_jobs) - 1, -1, -1):
-                    print('开始计算个人最高倍数任务') 
-                    print(person_ca)
-                    for j in range(len(person_ca)):
-                        if person_ca_jobs[i][0] ==  person_ca[j][3]:
-                            now_cap = float(person_ca_jobs[i][1])*float(person_ca[j][-3])
-                            print(now_cap)
-                            print(person_ca[j][5])
-                            # 币价产生了新高
-                            if now_cap > person_ca[j][5]:
-                                person_ca[j][5] = now_cap
-                                print('---------------------------')
-                                print('{}喊单的{}已创新高{}'.format(person_ca[j][1],person_ca[j][3],person_ca[j][5]))
-                    del person_ca_jobs[i]           
-                        
-                           
-
-#person_ca.append([wxId, caller_simulate_name, data['chainId'], data['ca'], data['circulatingSupply']*data['price'], data['circulatingSupply']*data['price'], data['circulatingSupply'], data['price'], data["find_time"]])
-        
-        except Exception as e:
-            logger.error(f"主循环发生错误: {str(e)}", exc_info=True)
-            continue """
 
 
 #根据 input_data 的顺序，重新排列 response_data['data']
@@ -1118,7 +1123,7 @@ def start_wcf_listener():
                 wcf.send_text("好的，小瓜瓜，爱你爱你哦,周末一起玩",msg.sender)
             '''
             # 判断是否是id指令，查询打印roomid
-            command_id(msg = msg)
+            command_id(wcf = wcf, msg = msg)
       
             # 判断是否是cextoken指令，查询发送交易所代币价格
             command_cextoken(wcf = wcf, msg= msg, groups= groups)
@@ -1165,7 +1170,7 @@ def start_wcf_listener():
                                                
             else:
                 chain_id = None
-                ca_ca = None      
+                ca_ca = None        
 
         except Empty:
             continue
@@ -1210,7 +1215,7 @@ def start_all_tasks():
     # 等待线程结束（如果需要的话）
     try:
         while True:
-            time.sleep(30)  # 每分钟检查一次
+            time.sleep(10)  # 每分钟检查一次
     except KeyboardInterrupt:
         stop_event.set()
         wcf_listener_thread.join()
@@ -1223,7 +1228,7 @@ def start_all_tasks():
         print("已停止所有任务")
 
 
-# 配置日志
+ # 配置日志
 logging.basicConfig(
     level=logging.DEBUG,  # 设置日志级别为 DEBUG
     format="%(asctime)s - %(levelname)s - %(message)s",  # 日志格式
@@ -1235,9 +1240,8 @@ logging.basicConfig(
 
 
 # 获取日志记录器
-logger = logging.getLogger("sol_ca_job_logger")
 
-logger = logging.getLogger("top_update_logger")
+logger = logging.getLogger("top_update_logger") 
 
 
 
@@ -1272,7 +1276,9 @@ r = redis.StrictRedis(host='localhost', port=6379, db=0, decode_responses=True)
 redis_client = redis.Redis(host='localhost', port=6379, db=0)
 
 # '53951514521@chatroom'
-groups = ["58224083481@chatroom",'52173635194@chatroom']
+groups = ["58224083481@chatroom",'52173635194@chatroom',"55968294101@chatroom"]
 
 print(12311111111111111111)
 start_all_tasks()
+#print(12311111111111111111)
+
